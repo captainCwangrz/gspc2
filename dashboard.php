@@ -1,6 +1,7 @@
 <?php
 // dashboard.php
 require_once 'config/db.php';
+require_once 'config/csrf.php';
 
 if(!isset($_SESSION["user_id"])) {
     header("Location: index.php");
@@ -12,9 +13,10 @@ if(!isset($_SESSION["user_id"])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="<?= generateCsrfToken() ?>">
     <title>Gossip Chain 3D</title>
     <link rel="stylesheet" href="public/css/style.css">
-    
+
     <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
     <script src="https://unpkg.com/three-spritetext@1.8.1/dist/three-spritetext.min.js"></script>
     <script src="https://unpkg.com/3d-force-graph@1.72.3/dist/3d-force-graph.min.js"></script>
@@ -26,7 +28,7 @@ if(!isset($_SESSION["user_id"])) {
 
     <div id="profile-hud" class="hud-panel">
         <div class="user-header">
-            <img src="assets/<?= htmlspecialchars($_SESSION["avatar"] ?? '0.png') ?>" class="avatar-circle" id="my-avatar"> 
+            <img src="assets/<?= htmlspecialchars($_SESSION["avatar"] ?? '0.png') ?>" class="avatar-circle" id="my-avatar">
             <div>
                 <div style="font-weight:bold;"><?= htmlspecialchars($_SESSION["username"]) ?></div>
                 <div style="font-size:0.8em; color:#94a3b8;">Status: Online</div>

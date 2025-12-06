@@ -1,12 +1,17 @@
 <?php
 // gspc2/api/relations.php
 require_once '../config/db.php'; // 修正引用路径
+require_once '../config/csrf.php';
 
 header('Content-Type: application/json');
 
 if(!isset($_SESSION["user_id"])) {
     http_response_code(401);
     exit(json_encode(['error' => 'Unauthorized']));
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    checkCsrf();
 }
 
 $user_id = $_SESSION["user_id"];
@@ -22,14 +27,25 @@ try {
         $valid_types = ['DATING', 'BEST_FRIEND', 'BROTHER', 'SISTER', 'BEEFING', 'CRUSH'];
         
         if ($to_id && in_array($type, $valid_types) && $to_id !== $user_id) {
-            // 检查是否已经存在请求或关系
-            $check = $pdo->prepare("SELECT id FROM requests WHERE from_id=? AND to_id=? AND status='PENDING'");
-            $check->execute([$user_id, $to_id]);
-            if(!$check->fetch()) {
+            // 1. 检查是否已有关系 (双向)
+            $checkRel = $pdo->prepare("SELECT id FROM relationships WHERE (from_id=? AND to_id=?) OR (from_id=? AND to_id=?)");
+            $checkRel->execute([$user_id, $to_id, $to_id, $user_id]);
+            if ($checkRel->fetch()) {
+                echo json_encode(['success' => false, 'error' => 'Relationship already exists']);
+                exit;
+            }
+
+            // 2. 检查是否已有 Pending 请求 (双向 - 避免重复或交叉请求)
+            $checkReq = $pdo->prepare("SELECT id FROM requests WHERE ((from_id=? AND to_id=?) OR (from_id=? AND to_id=?)) AND status='PENDING'");
+            $checkReq->execute([$user_id, $to_id, $to_id, $user_id]);
+
+            if(!$checkReq->fetch()) {
                 $stmt = $pdo->prepare('INSERT INTO requests (from_id, to_id, type) VALUES (?, ?, ?)');
                 $stmt->execute([$user_id, $to_id, $type]);
+                echo json_encode(['success' => true]);
+            } else {
+                echo json_encode(['success' => false, 'error' => 'Request pending']);
             }
-            echo json_encode(['success' => true]);
         } else {
             http_response_code(400);
             echo json_encode(['error' => 'Invalid parameters']);
@@ -45,6 +61,17 @@ try {
         $request = $stmt->fetch();
 
         if ($request) {
+            // Double check: ensure no relationship exists
+            $checkRel = $pdo->prepare("SELECT id FROM relationships WHERE (from_id=? AND to_id=?) OR (from_id=? AND to_id=?)");
+            $checkRel->execute([$request['from_id'], $request['to_id'], $request['to_id'], $request['from_id']]);
+
+            if ($checkRel->fetch()) {
+                // Relationship already exists, void this request
+                $pdo->prepare('UPDATE requests SET status = "REJECTED" WHERE id=?')->execute([$req_id]);
+                echo json_encode(['success' => false, 'error' => 'Relationship already exists']);
+                exit;
+            }
+
             $pdo->beginTransaction();
             // 1. 更新请求状态
             $upd = $pdo->prepare('UPDATE requests SET status = "ACCEPTED" WHERE id=?');
