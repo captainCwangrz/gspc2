@@ -22,27 +22,40 @@ if(!isset($_SESSION["user_id"])) {
     <script src="https://unpkg.com/3d-force-graph@1.72.3/dist/3d-force-graph.min.js"></script>
 </head>
 <body>
-
+    <div id="toast-container"></div>
     <div id="loader"><h2>Connecting to Gossip Neural Net...</h2></div>
     <div id="3d-graph"></div>
+
+    <div id="search-hud" class="hud-panel">
+        <input type="text" id="search-input" class="search-box" placeholder="Search for a user...">
+        <div id="search-results"></div>
+    </div>
 
     <div id="profile-hud" class="hud-panel">
         <div class="user-header">
             <img src="assets/<?= htmlspecialchars($_SESSION["avatar"] ?? '0.png') ?>" class="avatar-circle" id="my-avatar">
             <div>
-                <div style="font-weight:bold;"><?= htmlspecialchars($_SESSION["username"]) ?></div>
-                <div style="font-size:0.8em; color:#94a3b8;">Status: Online</div>
+                <div class="username-label"><?= htmlspecialchars($_SESSION["username"]) ?></div>
+                <div class="status-label">Status: Online</div>
             </div>
         </div>
-        <div style="display:flex; justify-content:space-between; margin-top:10px;">
-            <a href="logout.php" style="color:#ef4444; text-decoration:none;">Log Out</a>
+        <div class="signature-container">
+            <input type="text" id="signature-input" placeholder="Update your signature...">
+            <button id="signature-update-btn">Update Signature</button>
+        </div>
+        <div class="logout-container">
+            <a href="logout.php" class="logout-link">Log Out</a>
             <span id="node-count-display">Loading...</span>
         </div>
     </div>
 
     <div id="notif-hud" class="hud-panel">
-        <div style="font-weight:bold; margin-bottom:8px; color:#facc15;">⚠️ Incoming Requests</div>
+        <div class="requests-header">⚠️ Incoming Requests</div>
         <div id="req-list"></div>
+        <div id="unread-msgs-container" class="unread-messages-container">
+             <div class="unread-messages-header">📬 Unread Messages</div>
+             <div id="unread-msgs-list"></div>
+        </div>
     </div>
 
     <div id="inspector-panel" class="hud-panel">
