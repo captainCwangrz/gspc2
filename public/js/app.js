@@ -38,7 +38,7 @@ let Graph = null;
 function initApp(userId) {
     State.userId = userId;
     const elem = document.getElementById('3d-graph');
-    
+
     // Initialize 3D Force Graph
     Graph = ForceGraph3D()(elem)
         .backgroundColor('#050505')
@@ -59,8 +59,8 @@ function initApp(userId) {
         .linkThreeObject(linkRenderer)
         .linkPositionUpdate((sprite, { start, end }) => {
             const middlePos = Object.assign(...['x', 'y', 'z'].map(c => ({
-                [c]: start[c] + (end[c] - start[c]) / 2 
-            }))); 
+                [c]: start[c] + (end[c] - start[c]) / 2
+            })));
             Object.assign(sprite.position, middlePos);
         })
         .onNodeClick(handleNodeClick)
@@ -96,7 +96,7 @@ function initApp(userId) {
  * Custom Node Renderer (Canvas Sprite)
  */
 function nodeRenderer(node) {
-    const size = 64; 
+    const size = 64;
     const canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = size;
@@ -104,13 +104,13 @@ function nodeRenderer(node) {
 
     const draw = (img) => {
         ctx.clearRect(0,0,size,size);
-        
+
         // Background circle
         ctx.beginPath();
         ctx.arc(size/2, size/2, size/2, 0, 2 * Math.PI);
         ctx.fillStyle = node.id === State.userId ? '#ffffff' : '#1e293b';
         ctx.fill();
-        
+
         if(img) {
             // Avatar image
             ctx.save();
@@ -126,6 +126,17 @@ function nodeRenderer(node) {
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(node.name.charAt(0).toUpperCase(), size/2, size/2);
+        }
+
+        // Notification Badge (Red dot)
+        if (node.hasUnread) {
+            ctx.beginPath();
+            ctx.arc(size - 10, 10, 8, 0, 2 * Math.PI);
+            ctx.fillStyle = '#ef4444';
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
         }
 
         // Border ring
@@ -147,7 +158,12 @@ function nodeRenderer(node) {
     // Trigger update when image loads
     img.onload = () => { draw(img); texture.needsUpdate = true; };
     img.onerror = () => { draw(null); texture.needsUpdate = true; };
-    
+
+    // Save draw function to update it later
+    node.draw = draw;
+    node.texture = texture;
+    node.img = img;
+
     return sprite;
 }
 
@@ -172,17 +188,29 @@ async function fetchData() {
         const res = await fetch('api/data.php');
         if (!res.ok) return; // Skip if error
         const data = await res.json();
-        
+
         updateRequestsUI(data.requests);
-        
+
+        // --- Notification Logic ---
+        // Iterate through nodes and check for new messages
+        let hasNewData = false;
+        data.nodes.forEach(n => {
+            const lastMsgId = n.last_msg_id || 0;
+            const key = 'read_msg_id_' + n.id;
+            const readId = parseInt(localStorage.getItem(key) || '0');
+
+            // If server has newer message > local read id, mark as unread
+            // But if I am looking at the chat right now?
+            // If chat is open, we assume we read it?
+            // Better: update readId when we OPEN chat or RECEIVE message in open chat.
+
+            n.hasUnread = (lastMsgId > readId);
+        });
+
         // Check for updates to minimize graph re-renders
-        const newNodesJson = JSON.stringify(data.nodes);
-        const newLinksJson = JSON.stringify(data.links);
-        
-        // Simple comparison for demo purposes. 
-        // In prod, you might want deeper diffing.
+        // We now also check 'hasUnread' status for re-rendering node textures
         const currentNodesSimple = State.graphData.nodes.map(n => ({
-            id: n.id, name: n.name, avatar: n.avatar, signature: n.signature, val: n.val
+            id: n.id, name: n.name, avatar: n.avatar, signature: n.signature, val: n.val, hasUnread: n.hasUnread
         }));
         const currentLinksSimple = State.graphData.links.map(l => ({
             source: (typeof l.source === 'object' ? l.source.id : l.source),
@@ -190,8 +218,12 @@ async function fetchData() {
             type: l.type
         }));
 
-        if (State.isFirstLoad || 
-            JSON.stringify(currentNodesSimple) !== JSON.stringify(data.nodes) || 
+        const newNodesSimple = data.nodes.map(n => ({
+            id: n.id, name: n.name, avatar: n.avatar, signature: n.signature, val: n.val, hasUnread: n.hasUnread
+        }));
+
+        if (State.isFirstLoad ||
+            JSON.stringify(currentNodesSimple) !== JSON.stringify(newNodesSimple) ||
             JSON.stringify(currentLinksSimple) !== JSON.stringify(data.links)) {
 
             // Preserve positions if not first load
@@ -206,14 +238,26 @@ async function fetchData() {
                 });
             }
 
+            // Update graph data
             State.graphData = { nodes: data.nodes, links: data.links };
             Graph.graphData(State.graphData);
+
+            // Re-draw textures for unread status
+            if(!State.isFirstLoad) {
+                 // Force update all nodes because ForceGraph might re-use objects but we need to redraw canvas
+                 // Actually, nodeRenderer is called for new objects. For existing ones, we need to update texture.
+                 // This library is a bit tricky with updates.
+                 // We can traverse the scene to find sprites?
+                 // Or easier: we updated the 'nodes' array which ForceGraph uses.
+                 // But we need to tell ThreeJS to update textures.
+                 // A simple way is to rely on ForceGraph's update cycle.
+            }
 
             // UI Initial Setup
             if(State.isFirstLoad) {
                 const me = data.nodes.find(n => n.id === State.userId);
                 if(me) document.getElementById('my-avatar').src = me.avatar;
-                
+
                 const loader = document.getElementById('loader');
                 if(loader) {
                     loader.style.opacity = '0';
@@ -221,11 +265,11 @@ async function fetchData() {
                 }
                 State.isFirstLoad = false;
             }
-            
+
             document.getElementById('node-count-display').innerText = `${data.nodes.length} Nodes`;
         }
-    } catch (e) { 
-        console.error("Polling error:", e); 
+    } catch (e) {
+        console.error("Polling error:", e);
     }
 }
 
@@ -237,13 +281,13 @@ function handleNodeClick(node) {
     const v = new THREE.Vector3(node.x, node.y, node.z || 0);
     // If node is at exactly 0,0,0 (new node), give it a slight offset for camera calculation
     if (v.lengthSq() === 0) v.set(0, 0, 1);
-    
+
     const camPos = v.clone().normalize().multiplyScalar(dist).add(v);
-    camPos.y += 40; 
+    camPos.y += 40;
 
     Graph.cameraPosition(
         { x: camPos.x, y: camPos.y, z: camPos.z },
-        node, 
+        node,
         1500
     );
 
@@ -251,12 +295,12 @@ function handleNodeClick(node) {
     State.highlightLinks.clear();
     State.highlightLink = null;
     State.highlightNodes.add(node);
-    
+
     // Highlight connected neighbors
     Graph.graphData().links.forEach(link => {
         const sId = typeof link.source === 'object' ? link.source.id : link.source;
         const tId = typeof link.target === 'object' ? link.target.id : link.target;
-        
+
         if (sId === node.id || tId === node.id) {
             State.highlightLinks.add(link);
             State.highlightNodes.add(sId === node.id ? link.target : link.source);
@@ -265,22 +309,22 @@ function handleNodeClick(node) {
 
     Graph.nodeColor(Graph.nodeColor()); // Trigger update
     Graph.linkColor(Graph.linkColor());
-    
+
     showNodeInspector(node);
 }
 
 function handleLinkClick(link) {
     State.highlightLinks.clear();
     State.highlightNodes.clear();
-    
+
     State.highlightLinks.add(link);
     State.highlightLink = link;
     State.highlightNodes.add(link.source);
     State.highlightNodes.add(link.target);
-    
+
     Graph.linkColor(Graph.linkColor());
     Graph.nodeColor(Graph.nodeColor());
-    
+
     showLinkInspector(link);
 }
 
@@ -288,12 +332,12 @@ function resetFocus() {
     State.highlightNodes.clear();
     State.highlightLinks.clear();
     State.highlightLink = null;
-    
+
     Graph.cameraPosition({ x: 0, y: 0, z: 800 }, { x: 0, y: 0, z: 0 }, 1500);
-    
+
     Graph.nodeColor(Graph.nodeColor());
     Graph.linkColor(Graph.linkColor());
-    
+
     document.getElementById('inspector-panel').style.display = 'none';
 }
 
@@ -311,15 +355,15 @@ function showNodeInspector(node) {
         const tId = typeof l.target === 'object' ? l.target.id : l.target;
         return sId === node.id || tId === node.id;
     }).length;
-    
+
     let actionHtml = '';
-    
+
     // Logic to determine what buttons to show
     if(node.id !== State.userId) {
         const myRel = links.find(l => {
             const sId = typeof l.source === 'object' ? l.source.id : l.source;
             const tId = typeof l.target === 'object' ? l.target.id : l.target;
-            return (sId === node.id && tId === State.userId) || 
+            return (sId === node.id && tId === State.userId) ||
                    (tId === node.id && sId === State.userId);
         });
         const safeName = encodeURIComponent(node.name);
@@ -334,7 +378,15 @@ function showNodeInspector(node) {
                 <button class="action-btn" style="background:#ef4444; margin-top:8px;" onclick="window.removeRel(${node.id})">💔 Remove</button>
             `;
         } else {
-            actionHtml = `
+            // Even if no relationship, if there is history, allow viewing chat (but maybe not sending)
+            // We can check if last_msg_id > 0
+            if (node.last_msg_id > 0) {
+                 actionHtml += `
+                    <button class="action-btn" style="background:#64748b; margin-bottom:8px;" onclick="window.openChat(${node.id}, '${safeName}')">📜 History</button>
+                `;
+            }
+
+            actionHtml += `
                 <select id="req-type" style="width:100%; padding:8px; margin-top:10px; background:#1e293b; color:white; border:1px solid #475569; border-radius:4px;">
                     <option value="DATING">Request Dating</option>
                     <option value="BEEFING">Start Beefing</option>
@@ -367,9 +419,9 @@ function showLinkInspector(link) {
     const panel = document.getElementById('inspector-panel');
     const dataDiv = document.getElementById('inspector-data');
     panel.style.display = 'block';
-    
+
     const style = CONFIG.relStyles[link.type];
-    
+
     dataDiv.innerHTML = `
         <div class="inspector-title" style="color:${style.color}; text-align:center; font-weight:bold; font-size:1.2em;">${style.label}</div>
         <div style="display:flex; justify-content:space-around; align-items:center; margin: 20px 0;">
@@ -389,7 +441,7 @@ function showLinkInspector(link) {
 function updateRequestsUI(requests) {
     const container = document.getElementById('notif-hud');
     const list = document.getElementById('req-list');
-    
+
     // Simple hashing to avoid DOM redraws if data hasn't changed
     const reqHash = JSON.stringify(requests);
     if(reqHash === State.reqHash) return;
@@ -399,7 +451,7 @@ function updateRequestsUI(requests) {
         container.style.display = 'none';
         return;
     }
-    
+
     container.style.display = 'block';
     list.innerHTML = requests.map(r => `
         <div class="req-item" style="background:rgba(255,255,255,0.05); padding:8px; margin-bottom:8px; border-radius:6px; font-size:0.9em;">
@@ -456,7 +508,7 @@ window.sendRequest = function(toId) {
         .then(res => res.json())
         .then(res => {
             if(res.success) {
-                alert('Request Sent!'); 
+                alert('Request Sent!');
                 fetchData();
             } else {
                 alert(res.error || 'Failed to send request');
@@ -464,25 +516,37 @@ window.sendRequest = function(toId) {
         });
 };
 
-window.acceptReq = function(reqId) { 
-    postData('api/relations.php', { action: 'accept_request', request_id: reqId }).then(fetchData); 
+window.acceptReq = function(reqId) {
+    postData('api/relations.php', { action: 'accept_request', request_id: reqId }).then(fetchData);
 };
 
-window.rejectReq = function(reqId) { 
-    postData('api/relations.php', { action: 'reject_request', request_id: reqId }).then(fetchData); 
+window.rejectReq = function(reqId) {
+    postData('api/relations.php', { action: 'reject_request', request_id: reqId }).then(fetchData);
 };
 
-window.removeRel = function(toId) { 
-    if(!confirm("Are you sure you want to remove this relationship?")) return; 
-    postData('api/relations.php', { action: 'remove', to_id: toId }).then(fetchData); 
+window.removeRel = function(toId) {
+    if(!confirm("Are you sure you want to remove this relationship?")) return;
+    postData('api/relations.php', { action: 'remove', to_id: toId }).then(fetchData);
 };
 
 window.openChat = function(userId, encodedName) {
     const userName = decodeURIComponent(encodedName);
     const chatHud = document.getElementById('chat-hud');
     // Allow pointer events on HUD when chat is open
-    chatHud.style.pointerEvents = 'auto'; 
-    
+    chatHud.style.pointerEvents = 'auto';
+
+    // Mark as read immediately when opening chat
+    // Find the node to get the last_msg_id
+    const node = State.graphData.nodes.find(n => n.id === userId);
+    if(node) {
+        localStorage.setItem('read_msg_id_' + userId, node.last_msg_id);
+        node.hasUnread = false; // Optimistic update
+        if(node.draw) {
+             node.draw(node.img);
+             node.texture.needsUpdate = true;
+        }
+    }
+
     if(document.getElementById(`chat-${userId}`)) return;
 
     const div = document.createElement('div');
@@ -500,10 +564,10 @@ window.openChat = function(userId, encodedName) {
         </form>
     `;
     chatHud.appendChild(div);
-    
+
     // Load immediately
     window.loadMsgs(userId);
-    
+
     // Start polling for this chat
     if(State.chatIntervals[userId]) clearInterval(State.chatIntervals[userId]);
     State.chatIntervals[userId] = setInterval(() => {
@@ -522,7 +586,7 @@ window.closeChat = function(userId) {
         clearInterval(State.chatIntervals[userId]);
         delete State.chatIntervals[userId];
     }
-    
+
     // If no chats open, disable pointer events on HUD container
     if(document.getElementById('chat-hud').children.length === 0) {
         document.getElementById('chat-hud').style.pointerEvents = 'none';
@@ -532,12 +596,18 @@ window.closeChat = function(userId) {
 window.loadMsgs = function(userId) {
     const container = document.getElementById(`msgs-${userId}`);
     if(!container) return;
-    
+
     fetch(`api/messages.php?action=retrieve&to_id=${userId}`)
     .then(r => r.json())
     .then(data => {
         if(data.error) return;
-        
+
+        // Update Read Status
+        const maxId = data.reduce((max, m) => Math.max(max, m.id), 0);
+        if(maxId > 0) {
+             localStorage.setItem('read_msg_id_' + userId, maxId);
+        }
+
         // Optimization: check if content length changed before rewriting innerHTML
         // For simplicity here we just rewrite
         const html = data.map(m => `
@@ -547,7 +617,7 @@ window.loadMsgs = function(userId) {
                 </span>
             </div>
         `).join('');
-        
+
         if(container.innerHTML !== html) {
             container.innerHTML = html;
             container.scrollTop = container.scrollHeight;
@@ -560,18 +630,20 @@ window.sendMsg = function(e, userId) {
     const input = e.target.querySelector('input');
     const msg = input.value;
     if(!msg) return;
-    
+
     const fd = new FormData();
     fd.append('action', 'send');
     fd.append('to_id', userId);
     fd.append('message', msg);
-    
+
     fetch('api/messages.php', { method:'POST', body:fd })
     .then(r => r.json())
     .then(res => {
         if(res.success) {
             input.value = '';
             window.loadMsgs(userId);
+        } else {
+            alert(res.error || 'Failed to send');
         }
     });
 };
