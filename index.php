@@ -2,6 +2,7 @@
 // gspc2/index.php
 // 修正：引用 config 目录下的 db.php
 require_once 'config/db.php';
+require_once 'config/csrf.php';
 
 if(isset($_SESSION["user_id"])) {
     header("Location: dashboard.php");
@@ -47,6 +48,7 @@ if(isset($_SESSION["user_id"])) {
         <?php if(isset($_GET['registered'])) echo '<p class="registered">Account created! Please login.</p>';?>
         
         <form method="post" action="api/auth.php">
+            <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
             <input type="hidden" name="action" value="login">
             <label>Username</label>
             <input type="text" name="username" required>
@@ -59,6 +61,7 @@ if(isset($_SESSION["user_id"])) {
         
         <h3 style="margin-top:0;">Register</h3>
         <form method="post" action="api/auth.php">
+            <input type="hidden" name="csrf_token" value="<?= generateCsrfToken() ?>">
             <input type="hidden" name="action" value="register">
             <label>Username</label>
             <input type="text" name="username" required>

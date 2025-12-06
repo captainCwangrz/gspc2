@@ -1,8 +1,17 @@
 <?php
 // api/auth.php
 require_once '../config/db.php';
+require_once '../config/csrf.php';
 
 $action = $_POST["action"] ?? "";
+
+// CSRF Check for Auth actions
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!validateCsrfToken($_POST['csrf_token'] ?? '')) {
+        die("Invalid CSRF Token");
+    }
+}
+
 $username = trim($_POST["username"] ?? "");
 $password = $_POST["password"] ?? "";
 
@@ -15,7 +24,7 @@ if ($action === "login") {
         $_SESSION["user_id"] = $user["id"];
         $_SESSION["username"] = $user["username"];
         $_SESSION["avatar"] = $user["avatar"]; // 存一下头像备用
-        header("Location: ../dashboard.php"); 
+        header("Location: ../dashboard.php");
         exit;
     }
     header("Location: ../index.php?error=invalid_credentials");
@@ -29,11 +38,11 @@ if ($action === "register") {
     if (!in_array($avatar, AVATARS)) $avatar = FALLBACK_AVATAR;
 
     $password_hash = password_hash($password, PASSWORD_DEFAULT);
-    
+
     // 简单的随机坐标生成
-    $range = 1000; 
+    $range = 1000;
     $success = false;
-    
+
     do {
         $x = (mt_rand() / mt_getrandmax() * 2 - 1) * $range;
         $y = (mt_rand() / mt_getrandmax() * 2 - 1) * $range;

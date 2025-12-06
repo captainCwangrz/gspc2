@@ -440,6 +440,11 @@ function escapeHtml(text) {
 function postData(url, data) {
     const fd = new FormData();
     for(let k in data) fd.append(k, data[k]);
+
+    // Add CSRF Token
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    if(meta) fd.append('csrf_token', meta.content);
+
     return fetch(url, { method: 'POST', body: fd });
 }
 
