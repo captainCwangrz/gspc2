@@ -631,12 +631,11 @@ window.sendMsg = function(e, userId) {
     const msg = input.value;
     if(!msg) return;
 
-    const fd = new FormData();
-    fd.append('action', 'send');
-    fd.append('to_id', userId);
-    fd.append('message', msg);
-
-    fetch('api/messages.php', { method:'POST', body:fd })
+    postData('api/messages.php', {
+        action: 'send',
+        to_id: userId,
+        message: msg
+    })
     .then(r => r.json())
     .then(res => {
         if(res.success) {
