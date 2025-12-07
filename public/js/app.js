@@ -588,10 +588,10 @@ window.sendRequest = function(toId) {
         .then(res => res.json())
         .then(res => {
             if(res.success) {
-                alert('Request Sent!');
+                showToast('Request Sent!');
                 fetchData();
             } else {
-                alert(res.error || 'Failed to send request');
+                showToast(res.error || 'Failed to send request', 'error');
             }
         });
 };
@@ -721,8 +721,9 @@ window.sendMsg = function(e, userId) {
         if(res.success) {
             input.value = '';
             window.loadMsgs(userId);
+            showToast('Message sent!', 'success');
         } else {
-            alert(res.error || 'Failed to send');
+            showToast(res.error || 'Failed to send', 'error');
         }
     });
 };
