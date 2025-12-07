@@ -201,13 +201,13 @@ async function fetchData() {
             // But if I am looking at the chat right now?
             // If chat is open, we assume we read it?
             // Better: update readId when we OPEN chat or RECEIVE message in open chat.
-
+            
             // Check for new incoming messages for toast
             if (lastMsgId > readId) {
                 // If this is a NEW unread message since last check (or we haven't toasted it yet)
                 const lastToastedId = parseInt(sessionStorage.getItem('last_toasted_msg_' + n.id) || '0');
                 if (lastMsgId > lastToastedId) {
-                    showToast(`New message from ${n.name}`);
+                    showToast(`New message from ${n.name}`, 'info', 0);
                     sessionStorage.setItem('last_toasted_msg_' + n.id, lastMsgId);
                 }
             }
@@ -535,23 +535,36 @@ function updateSignature() {
         });
 }
 
-function showToast(message, type = 'success') {
+function showToast(message, type = 'success', duration = 3000) {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.textContent = message;
+    
+    // Allow manual dismissal
+    toast.onclick = () => {
+        toast.classList.remove('show');
+        setTimeout(() => {
+            if (toast.parentElement) container.removeChild(toast);
+        }, 300);
+    };
+
     container.appendChild(toast);
 
     setTimeout(() => {
         toast.classList.add('show');
     }, 100);
 
-    setTimeout(() => {
-        toast.classList.remove('show');
+    if (duration > 0) {
         setTimeout(() => {
-            container.removeChild(toast);
-        }, 300);
-    }, 3000);
+            if (toast.parentElement) {
+                toast.classList.remove('show');
+                setTimeout(() => {
+                    if (toast.parentElement) container.removeChild(toast);
+                }, 300);
+            }
+        }, duration);
+    }
 }
 
 /**
