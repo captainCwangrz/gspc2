@@ -20,6 +20,13 @@ if(!isset($_SESSION["user_id"])) {
     <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
     <script src="https://unpkg.com/three-spritetext@1.8.1/dist/three-spritetext.min.js"></script>
     <script src="https://unpkg.com/3d-force-graph@1.72.3/dist/3d-force-graph.min.js"></script>
+    <script>
+        // Inject configuration from backend
+        window.APP_CONFIG = {
+            RELATION_TYPES: <?php echo json_encode(RELATION_TYPES); ?>,
+            RELATION_STYLES: <?php echo json_encode(RELATION_STYLES); ?>
+        };
+    </script>
 </head>
 <body>
     <div id="toast-container"></div>

@@ -15,6 +15,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $user_id = $_SESSION["user_id"];
+session_write_close(); // Unblock session
+
 $action = $_POST["action"] ?? $_GET["action"] ?? "";
 
 // Helper: Check if active relationship exists
@@ -54,17 +56,43 @@ try {
     // Retrieve Message History
     if ($action === "retrieve") {
         $to_id = (int)($_GET["to_id"] ?? 0);
-        
+        $before_id = (int)($_GET["before_id"] ?? 0);
+        $limit = (int)($_GET["limit"] ?? 50);
+        if ($limit > 100) $limit = 100; // Hard cap limit
+
         // Relaxed check: Allow viewing history if user was a participant, even if relationship is gone.
-        // We trust that if a message exists between them, they were once connected.
         if ($to_id) {
-            $sql = 'SELECT id, from_id, message, DATE_FORMAT(timestamp, "%Y-%m-%d %H:%i:%s") AS created_at 
+            $params = [$user_id, $to_id, $to_id, $user_id];
+            $whereClause = '((from_id=? AND to_id=?) OR (from_id=? AND to_id=?))';
+
+            if ($before_id > 0) {
+                $whereClause .= ' AND id < ?';
+                $params[] = $before_id;
+            }
+
+            // Optimization: Get latest messages by ordering DESC first, then re-sort PHP side if needed?
+            // Actually, for "scroll up", we usually want the "latest 50 messages before X".
+            // So ORDER BY id DESC LIMIT 50 is correct, then we reverse the array for display.
+
+            $sql = "SELECT id, from_id, message, DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s') AS created_at
                     FROM messages 
-                    WHERE (from_id=? AND to_id=?) OR (from_id=? AND to_id=?) 
-                    ORDER BY id ASC';
+                    WHERE $whereClause
+                    ORDER BY id DESC LIMIT ?";
+
+            // Limit must be integer for PDO emulation usually, but better bind it explicitly
             $stmt = $pdo->prepare($sql);
-            $stmt->execute([$user_id, $to_id, $to_id, $user_id]);
-            echo json_encode($stmt->fetchAll());
+
+            // Bind params
+            foreach ($params as $k => $v) {
+                $stmt->bindValue($k+1, $v, PDO::PARAM_INT);
+            }
+            $stmt->bindValue(count($params)+1, $limit, PDO::PARAM_INT);
+
+            $stmt->execute();
+            $results = $stmt->fetchAll();
+
+            // Reverse to Chronological order (Oldest -> Newest) for the frontend to append
+            echo json_encode(array_reverse($results));
         } else {
             http_response_code(400);
             echo json_encode(['error' => 'Invalid parameters']);
