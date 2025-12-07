@@ -298,10 +298,16 @@ async function fetchData() {
             Graph.graphData(State.graphData);
 
             // UI Initial Setup
-            if(State.isFirstLoad) {
-                const me = data.nodes.find(n => n.id === State.userId);
-                if(me) document.getElementById('my-avatar').src = me.avatar;
+            // Update own profile info
+            const me = data.nodes.find(n => n.id === State.userId);
+            if (me) {
+                if (State.isFirstLoad) document.getElementById('my-avatar').src = me.avatar;
 
+                const sigEl = document.getElementById('my-signature');
+                if (sigEl) sigEl.textContent = me.signature || "No signature set.";
+            }
+
+            if(State.isFirstLoad) {
                 const loader = document.getElementById('loader');
                 if(loader) {
                     loader.style.opacity = '0';

@@ -43,9 +43,11 @@ if(!isset($_SESSION["user_id"])) {
             <img src="assets/<?= htmlspecialchars($_SESSION["avatar"] ?? '0.png') ?>" class="avatar-circle" id="my-avatar">
             <div>
                 <div class="username-label"><?= htmlspecialchars($_SESSION["username"]) ?></div>
+                <div class="user-id-label" id="my-user-id" style="font-size: 0.8em; color: #94a3b8;">ID: <?= $_SESSION["user_id"] ?></div>
                 <div class="status-label">Status: Online</div>
             </div>
         </div>
+        <div id="my-signature" style="margin-bottom: 10px; font-style: italic; color: #cbd5e1; font-size: 0.9em;"></div>
         <div class="signature-container">
             <input type="text" id="signature-input" placeholder="Update your signature...">
             <button id="signature-update-btn">Update Signature</button>

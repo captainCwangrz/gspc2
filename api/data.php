@@ -28,13 +28,13 @@ try {
     ')->fetch(PDO::FETCH_ASSOC);
 
     // Personal state (requests & messages)
-    // We include last_msg_id in hash because if a new message arrives, we need to update "hasUnread" status on nodes.
+    // We include last_msg_id and MAX(timestamp) in hash to ensure we catch all updates
     $msgStmt = $pdo->prepare('
-        SELECT MAX(id) as max_msg_id FROM messages
+        SELECT CONCAT(MAX(id), "-", MAX(timestamp)) as msg_hash FROM messages
         WHERE from_id = ? OR to_id = ?
     ');
     $msgStmt->execute([$current_user_id, $current_user_id]);
-    $maxMsgId = $msgStmt->fetchColumn();
+    $msgHash = $msgStmt->fetchColumn();
 
     $reqStmt = $pdo->prepare('
         SELECT MAX(id) as max_req_id, COUNT(*) as req_count
@@ -47,7 +47,7 @@ try {
     $etagParts = [
         $graphState['u_hash'],
         $graphState['r_hash'],
-        $maxMsgId,
+        $msgHash,
         $reqState['max_req_id'],
         $reqState['req_count'],
         $current_user_id
