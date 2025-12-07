@@ -77,14 +77,10 @@ function initApp(userId) {
     }
 
     // Initialize Search Listener
-    const searchInput = document.getElementById('search-input');
-    if (searchInput) {
-        searchInput.addEventListener('input', (e) => {
-            const val = e.target.value.toLowerCase();
-            const node = State.graphData.nodes.find(n => n.name.toLowerCase().includes(val));
-            if(node) handleNodeClick(node);
-        });
-    }
+    document.getElementById('search-input').addEventListener('input', handleSearch);
+
+    // Initialize Signature Update Listener
+    document.getElementById('signature-update-btn').addEventListener('click', updateSignature);
 
     // Start Loops
     fetchData();
@@ -190,6 +186,8 @@ async function fetchData() {
         const data = await res.json();
 
         updateRequestsUI(data.requests);
+        updateUnreadMessagesUI(data.nodes);
+
 
         // --- Notification Logic ---
         // Iterate through nodes and check for new messages
@@ -462,6 +460,88 @@ function updateRequestsUI(requests) {
             </div>
         </div>
     `).join('');
+}
+
+function updateUnreadMessagesUI(nodes) {
+    const container = document.getElementById('unread-msgs-container');
+    const list = document.getElementById('unread-msgs-list');
+    const unreadNodes = nodes.filter(n => n.hasUnread && n.id !== State.userId);
+
+    if (unreadNodes.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'block';
+    list.innerHTML = unreadNodes.map(n => `
+        <div class="unread-item" onclick="window.openChat(${n.id}, '${encodeURIComponent(n.name)}')" style="cursor:pointer; background:rgba(56,189,248,0.1); padding:8px; margin-bottom:8px; border-radius:6px; font-size:0.9em;">
+            New message from <strong>${escapeHtml(n.name)}</strong>
+        </div>
+    `).join('');
+}
+
+function handleSearch(e) {
+    const searchTerm = e.target.value.toLowerCase();
+    const resultsContainer = document.getElementById('search-results');
+    if (!searchTerm) {
+        resultsContainer.innerHTML = '';
+        resultsContainer.style.display = 'none';
+        return;
+    }
+
+    const hits = State.graphData.nodes.filter(n =>
+        n.name.toLowerCase().includes(searchTerm) || String(n.id) === searchTerm
+    );
+
+    if (hits.length === 0) {
+        resultsContainer.innerHTML = '<div class="search-result-item">No users found.</div>';
+    } else {
+        resultsContainer.innerHTML = hits.map(n => `
+            <div class="search-result-item" onclick="handleNodeClick(State.graphData.nodes.find(user => user.id === ${n.id})); document.getElementById('search-input').value=''; handleSearch({target:{value:''}});">
+                ${escapeHtml(n.name)}
+            </div>
+        `).join('');
+    }
+    resultsContainer.style.display = 'block';
+}
+
+function updateSignature() {
+    const newSignature = document.getElementById('signature-input').value;
+    if (!newSignature) {
+        showToast("Signature cannot be empty.", "error");
+        return;
+    }
+
+    postData('api/profile.php', { signature: newSignature })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                showToast("Signature updated!");
+                document.getElementById('signature-input').value = '';
+                fetchData(); // Refresh data to show new signature
+            } else {
+                showToast("Error: " + data.error, "error");
+            }
+        });
+}
+
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+        toast.classList.add('show');
+    }, 100);
+
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => {
+            container.removeChild(toast);
+        }, 300);
+    }, 3000);
 }
 
 /**
