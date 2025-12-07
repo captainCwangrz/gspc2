@@ -202,6 +202,16 @@ async function fetchData() {
             // If chat is open, we assume we read it?
             // Better: update readId when we OPEN chat or RECEIVE message in open chat.
 
+            // Check for new incoming messages for toast
+            if (lastMsgId > readId) {
+                // If this is a NEW unread message since last check (or we haven't toasted it yet)
+                const lastToastedId = parseInt(sessionStorage.getItem('last_toasted_msg_' + n.id) || '0');
+                if (lastMsgId > lastToastedId) {
+                    showToast(`New message from ${n.name}`);
+                    sessionStorage.setItem('last_toasted_msg_' + n.id, lastMsgId);
+                }
+            }
+
             n.hasUnread = (lastMsgId > readId);
         });
 
@@ -588,10 +598,10 @@ window.sendRequest = function(toId) {
         .then(res => res.json())
         .then(res => {
             if(res.success) {
-                alert('Request Sent!');
+                showToast('Request Sent!');
                 fetchData();
             } else {
-                alert(res.error || 'Failed to send request');
+                showToast(res.error || 'Failed to send request', 'error');
             }
         });
 };
@@ -721,8 +731,9 @@ window.sendMsg = function(e, userId) {
         if(res.success) {
             input.value = '';
             window.loadMsgs(userId);
+            showToast('Message sent!', 'success');
         } else {
-            alert(res.error || 'Failed to send');
+            showToast(res.error || 'Failed to send', 'error');
         }
     });
 };
