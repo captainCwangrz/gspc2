@@ -10,8 +10,60 @@ if (!isset($_SESSION["user_id"])) {
     exit;
 }
 
+$current_user_id = $_SESSION["user_id"];
+session_write_close(); // Unblock session
+
 try {
-    $current_user_id = $_SESSION["user_id"];
+    // --- ETag / Caching Logic ---
+
+    // Efficiently query state hash
+    // We check MAX(updated_at) and COUNT(*) for both users and relationships.
+    // Also check max ID of messages relevant to user to know if unread state changed.
+
+    // Global graph state
+    $graphState = $pdo->query('
+        SELECT
+            (SELECT CONCAT(COUNT(*), "-", MAX(updated_at)) FROM users) as u_hash,
+            (SELECT CONCAT(COUNT(*), "-", MAX(updated_at)) FROM relationships) as r_hash
+    ')->fetch(PDO::FETCH_ASSOC);
+
+    // Personal state (requests & messages)
+    // We include last_msg_id in hash because if a new message arrives, we need to update "hasUnread" status on nodes.
+    $msgStmt = $pdo->prepare('
+        SELECT MAX(id) as max_msg_id FROM messages
+        WHERE from_id = ? OR to_id = ?
+    ');
+    $msgStmt->execute([$current_user_id, $current_user_id]);
+    $maxMsgId = $msgStmt->fetchColumn();
+
+    $reqStmt = $pdo->prepare('
+        SELECT MAX(id) as max_req_id, COUNT(*) as req_count
+        FROM requests
+        WHERE to_id = ? AND status = "PENDING"
+    ');
+    $reqStmt->execute([$current_user_id]);
+    $reqState = $reqStmt->fetch(PDO::FETCH_ASSOC);
+
+    $etagParts = [
+        $graphState['u_hash'],
+        $graphState['r_hash'],
+        $maxMsgId,
+        $reqState['max_req_id'],
+        $reqState['req_count'],
+        $current_user_id
+    ];
+
+    $etag = md5(implode('|', $etagParts));
+
+    header('ETag: "' . $etag . '"');
+    header('Cache-Control: no-cache, must-revalidate'); // Force browser to check ETag
+
+    if (isset($_SERVER['HTTP_IF_NONE_MATCH']) && trim($_SERVER['HTTP_IF_NONE_MATCH'], '"') === $etag) {
+        http_response_code(304);
+        exit;
+    }
+
+    // --- Full Data Fetch (Only if Changed) ---
 
     // 1. Get all nodes
     $nodes = $pdo->query('SELECT id, username, avatar, signature, x_pos, y_pos FROM users')->fetchAll();
@@ -31,7 +83,6 @@ try {
     $requests = $stmt->fetchAll();
 
     // 4. Get last message ID for each conversation involving the current user
-    // This allows the frontend to determine if there are new messages
     $msgStmt = $pdo->prepare('
         SELECT
             CASE

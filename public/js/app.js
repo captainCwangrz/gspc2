@@ -4,9 +4,10 @@
  */
 
 // --- Configuration ---
+// Use config injected from backend if available, else fallback
 const CONFIG = {
     pollInterval: 3000,
-    relStyles: {
+    relStyles: window.APP_CONFIG && window.APP_CONFIG.RELATION_STYLES ? window.APP_CONFIG.RELATION_STYLES : {
         'DATING': { color: '#ec4899', particle: true, label: '❤️ Dating' },
         'BEST_FRIEND': { color: '#3b82f6', particle: false, label: '💎 Bestie' },
         'BROTHER': { color: '#10b981', particle: false, label: '👊 Bro' },
@@ -15,6 +16,8 @@ const CONFIG = {
         'CRUSH': { color: '#a855f7', particle: true, label: '✨ Crush' }
     }
 };
+
+const RELATION_TYPES = window.APP_CONFIG && window.APP_CONFIG.RELATION_TYPES ? window.APP_CONFIG.RELATION_TYPES : ['DATING', 'BEST_FRIEND', 'BROTHER', 'SISTER', 'BEEFING', 'CRUSH'];
 
 // --- Global State ---
 const State = {
@@ -25,7 +28,8 @@ const State = {
     highlightLinks: new Set(),
     highlightLink: null,
     isFirstLoad: true,
-    chatIntervals: {} // Store chat polling intervals
+    etag: null, // Store ETag for caching
+    activeChats: new Set() // Track active chat userIds
 };
 
 // Graph Instance
@@ -143,6 +147,11 @@ function nodeRenderer(node) {
         ctx.stroke();
     };
 
+    // Clean up previous texture if it exists to prevent memory leak
+    if (node.texture) {
+        node.texture.dispose();
+    }
+
     const texture = new THREE.CanvasTexture(canvas);
     const material = new THREE.SpriteMaterial({ map: texture });
     const sprite = new THREE.Sprite(material);
@@ -159,6 +168,11 @@ function nodeRenderer(node) {
     node.draw = draw;
     node.texture = texture;
     node.img = img;
+    // We add a dispose method to node to clean up manually if needed
+    node.dispose = () => {
+        if(node.texture) node.texture.dispose();
+        if(node.material) node.material.dispose();
+    };
 
     return sprite;
 }
@@ -181,33 +195,66 @@ function linkRenderer(link) {
  */
 async function fetchData() {
     try {
-        const res = await fetch('api/data.php');
-        if (!res.ok) return; // Skip if error
+        const headers = {};
+        if (State.etag) {
+            headers['If-None-Match'] = State.etag;
+        }
+
+        const res = await fetch('api/data.php', { headers });
+
+        // Handle 304 Not Modified
+        if (res.status === 304) {
+            // Data hasn't changed.
+            // Check if we need to poll messages for active chat windows?
+            // Actually, if 304, it means max(updated_at) and max(msg_id) hasn't changed.
+            // So we don't need to do anything, unless we have active chats that we want to be super real-time?
+            // But api/data.php includes max_msg_id in ETag. So if a new message came, ETag would change.
+            // So 304 means absolutely nothing new.
+            return;
+        }
+
+        if (!res.ok) return;
+
+        // Update ETag
+        const etag = res.headers.get('ETag');
+        if (etag) State.etag = etag;
+
         const data = await res.json();
 
         updateRequestsUI(data.requests);
         updateUnreadMessagesUI(data.nodes);
 
-
-        // --- Notification Logic ---
-        // Iterate through nodes and check for new messages
-        let hasNewData = false;
+        // --- Notification & Chat Logic ---
         data.nodes.forEach(n => {
             const lastMsgId = n.last_msg_id || 0;
             const key = 'read_msg_id_' + n.id;
             const readId = parseInt(localStorage.getItem(key) || '0');
 
-            // If server has newer message > local read id, mark as unread
-            // But if I am looking at the chat right now?
-            // If chat is open, we assume we read it?
-            // Better: update readId when we OPEN chat or RECEIVE message in open chat.
-            
+            // If we have an active chat open for this user, trigger a load
+            if (State.activeChats.has(n.id)) {
+                // Determine if we need to fetch new messages
+                // We can check if lastMsgId > known latest in chat?
+                // Or just blindly call loadMsgs(n.id) if the global last_msg_id changed?
+                // For simplicity: If lastMsgId differs from what we think is the last read, reload.
+                // Or just reload always if chat is open and data refreshed.
+                // Let's store the last loaded msg id for the window in a DOM attribute or State.
+                const chatWin = document.getElementById(`chat-${n.id}`);
+                if (chatWin) {
+                    const currentMax = parseInt(chatWin.getAttribute('data-last-id') || '0');
+                    if (lastMsgId > currentMax) {
+                        window.loadMsgs(n.id);
+                    }
+                }
+            }
+
             // Check for new incoming messages for toast
             if (lastMsgId > readId) {
-                // If this is a NEW unread message since last check (or we haven't toasted it yet)
                 const lastToastedId = parseInt(sessionStorage.getItem('last_toasted_msg_' + n.id) || '0');
                 if (lastMsgId > lastToastedId) {
-                    showToast(`New message from ${n.name}`, 'info', 0);
+                    // Only toast if not currently chatting with them
+                    if (!State.activeChats.has(n.id)) {
+                        showToast(`New message from ${n.name}`, 'info', 0);
+                    }
                     sessionStorage.setItem('last_toasted_msg_' + n.id, lastMsgId);
                 }
             }
@@ -216,18 +263,18 @@ async function fetchData() {
         });
 
         // Check for updates to minimize graph re-renders
-        // We now also check 'hasUnread' status for re-rendering node textures
         const currentNodesSimple = State.graphData.nodes.map(n => ({
             id: n.id, name: n.name, avatar: n.avatar, signature: n.signature, val: n.val, hasUnread: n.hasUnread
-        }));
-        const currentLinksSimple = State.graphData.links.map(l => ({
-            source: (typeof l.source === 'object' ? l.source.id : l.source),
-            target: (typeof l.target === 'object' ? l.target.id : l.target),
-            type: l.type
         }));
 
         const newNodesSimple = data.nodes.map(n => ({
             id: n.id, name: n.name, avatar: n.avatar, signature: n.signature, val: n.val, hasUnread: n.hasUnread
+        }));
+
+        const currentLinksSimple = State.graphData.links.map(l => ({
+            source: (typeof l.source === 'object' ? l.source.id : l.source),
+            target: (typeof l.target === 'object' ? l.target.id : l.target),
+            type: l.type
         }));
 
         if (State.isFirstLoad ||
@@ -249,17 +296,6 @@ async function fetchData() {
             // Update graph data
             State.graphData = { nodes: data.nodes, links: data.links };
             Graph.graphData(State.graphData);
-
-            // Re-draw textures for unread status
-            if(!State.isFirstLoad) {
-                 // Force update all nodes because ForceGraph might re-use objects but we need to redraw canvas
-                 // Actually, nodeRenderer is called for new objects. For existing ones, we need to update texture.
-                 // This library is a bit tricky with updates.
-                 // We can traverse the scene to find sprites?
-                 // Or easier: we updated the 'nodes' array which ForceGraph uses.
-                 // But we need to tell ThreeJS to update textures.
-                 // A simple way is to rely on ForceGraph's update cycle.
-            }
 
             // UI Initial Setup
             if(State.isFirstLoad) {
@@ -287,7 +323,6 @@ async function fetchData() {
 function handleNodeClick(node) {
     const dist = 150;
     const v = new THREE.Vector3(node.x, node.y, node.z || 0);
-    // If node is at exactly 0,0,0 (new node), give it a slight offset for camera calculation
     if (v.lengthSq() === 0) v.set(0, 0, 1);
 
     const camPos = v.clone().normalize().multiplyScalar(dist).add(v);
@@ -304,7 +339,6 @@ function handleNodeClick(node) {
     State.highlightLink = null;
     State.highlightNodes.add(node);
 
-    // Highlight connected neighbors
     Graph.graphData().links.forEach(link => {
         const sId = typeof link.source === 'object' ? link.source.id : link.source;
         const tId = typeof link.target === 'object' ? link.target.id : link.target;
@@ -315,7 +349,7 @@ function handleNodeClick(node) {
         }
     });
 
-    Graph.nodeColor(Graph.nodeColor()); // Trigger update
+    Graph.nodeColor(Graph.nodeColor());
     Graph.linkColor(Graph.linkColor());
 
     showNodeInspector(node);
@@ -366,7 +400,6 @@ function showNodeInspector(node) {
 
     let actionHtml = '';
 
-    // Logic to determine what buttons to show
     if(node.id !== State.userId) {
         const myRel = links.find(l => {
             const sId = typeof l.source === 'object' ? l.source.id : l.source;
@@ -378,28 +411,37 @@ function showNodeInspector(node) {
 
         if(myRel) {
             const style = CONFIG.relStyles[myRel.type] || { color: '#fff' };
+            // Generate options for updating, marking the current one as selected
+            const options = RELATION_TYPES.map(t =>
+                `<option value="${t}" ${myRel.type === t ? 'selected' : ''}>${t}</option>`
+            ).join('');
+
             actionHtml = `
                 <div style="margin-top:10px; padding:8px; background:rgba(255,255,255,0.1); border-radius:4px; text-align:center;">
                     Status: <strong style="color:${style.color}">${myRel.type}</strong>
                 </div>
+
+                <div style="margin-top:8px;">
+                     <select id="update-rel-type" style="width:70%; padding:6px; background:#1e293b; color:white; border:1px solid #475569; border-radius:4px;">
+                        ${options}
+                    </select>
+                    <button class="action-btn" style="width:25%; display:inline-block;" onclick="window.updateRel(${node.id})">Update</button>
+                </div>
+
                 <button class="action-btn" onclick="window.openChat(${node.id}, '${safeName}')">💬 Message</button>
                 <button class="action-btn" style="background:#ef4444; margin-top:8px;" onclick="window.removeRel(${node.id})">💔 Remove</button>
             `;
         } else {
-            // Even if no relationship, if there is history, allow viewing chat (but maybe not sending)
-            // We can check if last_msg_id > 0
             if (node.last_msg_id > 0) {
                  actionHtml += `
                     <button class="action-btn" style="background:#64748b; margin-bottom:8px;" onclick="window.openChat(${node.id}, '${safeName}')">📜 History</button>
                 `;
             }
 
+            const options = RELATION_TYPES.map(t => `<option value="${t}">Request ${t}</option>`).join('');
             actionHtml += `
                 <select id="req-type" style="width:100%; padding:8px; margin-top:10px; background:#1e293b; color:white; border:1px solid #475569; border-radius:4px;">
-                    <option value="DATING">Request Dating</option>
-                    <option value="BEEFING">Start Beefing</option>
-                    <option value="BEST_FRIEND">Add Bestie</option>
-                    <option value="CRUSH">Confess Crush</option>
+                    ${options}
                 </select>
                 <button class="action-btn" onclick="window.sendRequest(${node.id})">🚀 Send Request</button>
             `;
@@ -450,7 +492,6 @@ function updateRequestsUI(requests) {
     const container = document.getElementById('notif-hud');
     const list = document.getElementById('req-list');
 
-    // Simple hashing to avoid DOM redraws if data hasn't changed
     const reqHash = JSON.stringify(requests);
     if(reqHash === State.reqHash) return;
     State.reqHash = reqHash;
@@ -528,7 +569,7 @@ function updateSignature() {
             if (data.success) {
                 showToast("Signature updated!");
                 document.getElementById('signature-input').value = '';
-                fetchData(); // Refresh data to show new signature
+                fetchData();
             } else {
                 showToast("Error: " + data.error, "error");
             }
@@ -541,7 +582,6 @@ function showToast(message, type = 'success', duration = 3000) {
     toast.className = `toast ${type}`;
     toast.textContent = message;
     
-    // Allow manual dismissal
     toast.onclick = () => {
         toast.classList.remove('show');
         setTimeout(() => {
@@ -567,9 +607,6 @@ function showToast(message, type = 'success', duration = 3000) {
     }
 }
 
-/**
- * Utility: Starfield Background
- */
 function initStarfield() {
     setTimeout(() => {
         if(!Graph) return;
@@ -596,7 +633,6 @@ function postData(url, data) {
     const fd = new FormData();
     for(let k in data) fd.append(k, data[k]);
 
-    // Add CSRF Token
     const meta = document.querySelector('meta[name="csrf-token"]');
     if(meta) fd.append('csrf_token', meta.content);
 
@@ -619,6 +655,20 @@ window.sendRequest = function(toId) {
         });
 };
 
+window.updateRel = function(toId) {
+    const type = document.getElementById('update-rel-type').value;
+    postData('api/relations.php', { action: 'update', to_id: toId, type: type })
+        .then(res => res.json())
+        .then(res => {
+            if(res.success) {
+                showToast('Relationship updated!');
+                fetchData();
+            } else {
+                showToast(res.error || 'Failed to update', 'error');
+            }
+        });
+};
+
 window.acceptReq = function(reqId) {
     postData('api/relations.php', { action: 'accept_request', request_id: reqId }).then(fetchData);
 };
@@ -635,15 +685,14 @@ window.removeRel = function(toId) {
 window.openChat = function(userId, encodedName) {
     const userName = decodeURIComponent(encodedName);
     const chatHud = document.getElementById('chat-hud');
-    // Allow pointer events on HUD when chat is open
     chatHud.style.pointerEvents = 'auto';
 
-    // Mark as read immediately when opening chat
-    // Find the node to get the last_msg_id
+    State.activeChats.add(userId);
+
     const node = State.graphData.nodes.find(n => n.id === userId);
     if(node) {
         localStorage.setItem('read_msg_id_' + userId, node.last_msg_id);
-        node.hasUnread = false; // Optimistic update
+        node.hasUnread = false;
         if(node.draw) {
              node.draw(node.img);
              node.texture.needsUpdate = true;
@@ -655,6 +704,7 @@ window.openChat = function(userId, encodedName) {
     const div = document.createElement('div');
     div.id = `chat-${userId}`;
     div.className = 'chat-window';
+    div.setAttribute('data-last-id', '0'); // Init last id
     div.innerHTML = `
         <div class="chat-header">
             <span>${escapeHtml(userName)}</span>
@@ -668,62 +718,142 @@ window.openChat = function(userId, encodedName) {
     `;
     chatHud.appendChild(div);
 
-    // Load immediately
+    // Initial load
     window.loadMsgs(userId);
 
-    // Start polling for this chat
-    if(State.chatIntervals[userId]) clearInterval(State.chatIntervals[userId]);
-    State.chatIntervals[userId] = setInterval(() => {
-        if(!document.getElementById(`chat-${userId}`)) {
-            window.closeChat(userId);
-        } else {
-            window.loadMsgs(userId);
+    // Add scroll listener for pagination
+    const msgsContainer = document.getElementById(`msgs-${userId}`);
+    msgsContainer.addEventListener('scroll', () => {
+        if(msgsContainer.scrollTop === 0) {
+            // Load more
+            // Get oldest ID from the first child
+            const firstMsg = msgsContainer.firstElementChild;
+            if (firstMsg) {
+                const oldestId = parseInt(firstMsg.getAttribute('data-id'));
+                if (oldestId > 1) { // 1 is theoretical min
+                    window.loadMsgs(userId, oldestId);
+                }
+            }
         }
-    }, 3000);
+    });
+
+    // We removed separate setInterval polling.
+    // Updates are now driven by main fetchData loop calling loadMsgs.
 };
 
 window.closeChat = function(userId) {
     const win = document.getElementById(`chat-${userId}`);
     if(win) win.remove();
-    if(State.chatIntervals[userId]) {
-        clearInterval(State.chatIntervals[userId]);
-        delete State.chatIntervals[userId];
-    }
+    State.activeChats.delete(userId);
 
-    // If no chats open, disable pointer events on HUD container
     if(document.getElementById('chat-hud').children.length === 0) {
         document.getElementById('chat-hud').style.pointerEvents = 'none';
     }
 };
 
-window.loadMsgs = function(userId) {
+window.loadMsgs = function(userId, beforeId = 0) {
     const container = document.getElementById(`msgs-${userId}`);
     if(!container) return;
 
-    fetch(`api/messages.php?action=retrieve&to_id=${userId}`)
+    // Logic for loading more (prepend) or loading latest (append/replace)
+    const isPagination = beforeId > 0;
+
+    // If it's a pagination load, show loading indicator?
+    // For now simple.
+
+    const url = `api/messages.php?action=retrieve&to_id=${userId}` + (isPagination ? `&before_id=${beforeId}` : '');
+
+    fetch(url)
     .then(r => r.json())
     .then(data => {
         if(data.error) return;
 
-        // Update Read Status
-        const maxId = data.reduce((max, m) => Math.max(max, m.id), 0);
-        if(maxId > 0) {
-             localStorage.setItem('read_msg_id_' + userId, maxId);
+        if (data.length === 0 && isPagination) {
+             // No more older messages
+             return;
         }
 
-        // Optimization: check if content length changed before rewriting innerHTML
-        // For simplicity here we just rewrite
+        // Generate HTML
         const html = data.map(m => `
-            <div style="text-align:${m.from_id == State.userId ? 'right' : 'left'}; margin-bottom:4px;">
+            <div class="msg-row" data-id="${m.id}" style="text-align:${m.from_id == State.userId ? 'right' : 'left'}; margin-bottom:4px;">
                 <span style="background:${m.from_id == State.userId ? '#6366f1' : '#334155'}; padding:4px 8px; border-radius:4px; display:inline-block; max-width:80%; word-break:break-word;">
                     ${escapeHtml(m.message)}
                 </span>
             </div>
         `).join('');
 
-        if(container.innerHTML !== html) {
-            container.innerHTML = html;
-            container.scrollTop = container.scrollHeight;
+        if (isPagination) {
+            // Save scroll height before appending
+            const oldHeight = container.scrollHeight;
+            const oldTop = container.scrollTop;
+
+            // Prepend content
+            container.insertAdjacentHTML('afterbegin', html);
+
+            // Adjust scroll position to keep view stable
+            // New scroll top = new height - old height + old top (which was 0 usually)
+            container.scrollTop = container.scrollHeight - oldHeight;
+
+        } else {
+            // Initial Load or Update
+            // If just updating, we only append new messages?
+            // The current simple approach is to replace content, but that kills scroll position if user is scrolling up.
+            // But main loop calls this when new message detected.
+            // If we replace innerHTML, we lose scroll position.
+            // Better: only append new messages.
+
+            // Check existing IDs
+            // Actually, the API returns latest 50.
+            // If we have messages, we probably want to append only those > current max id.
+            // But wait, `loadMsgs` without `beforeId` is called on init AND update.
+            // On init, it loads latest 50.
+            // On update, it loads latest 50.
+
+            if (container.innerHTML === 'Loading...') {
+                container.innerHTML = html;
+                container.scrollTop = container.scrollHeight;
+            } else {
+                // Determine the last ID we currently have
+                const lastChild = container.lastElementChild;
+                const currentMaxId = lastChild ? parseInt(lastChild.getAttribute('data-id')) : 0;
+
+                // Filter data for new messages
+                const newMsgs = data.filter(m => m.id > currentMaxId);
+
+                if (newMsgs.length > 0) {
+                     const newHtml = newMsgs.map(m => `
+                        <div class="msg-row" data-id="${m.id}" style="text-align:${m.from_id == State.userId ? 'right' : 'left'}; margin-bottom:4px;">
+                            <span style="background:${m.from_id == State.userId ? '#6366f1' : '#334155'}; padding:4px 8px; border-radius:4px; display:inline-block; max-width:80%; word-break:break-word;">
+                                ${escapeHtml(m.message)}
+                            </span>
+                        </div>
+                    `).join('');
+                    container.insertAdjacentHTML('beforeend', newHtml);
+
+                    // Auto scroll to bottom only if user was near bottom
+                    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
+                    if (isNearBottom) {
+                        container.scrollTop = container.scrollHeight;
+                    } else {
+                        showToast('New message received (Scroll down)', 'info');
+                    }
+                }
+            }
+        }
+
+        // Update Read Status tracking
+        // Get the absolute max id from data (which is sorted asc by default from logic above? wait)
+        // api/messages.php reverse() returns Old -> New.
+        // So last item is newest.
+        if (data.length > 0) {
+            const newest = data[data.length - 1];
+            // Only update local storage read id if this is the latest batch (not pagination)
+            if (!isPagination) {
+                const newMax = newest.id;
+                // Update window attribute
+                document.getElementById(`chat-${userId}`).setAttribute('data-last-id', newMax);
+                localStorage.setItem('read_msg_id_' + userId, newMax);
+            }
         }
     });
 };
@@ -743,8 +873,8 @@ window.sendMsg = function(e, userId) {
     .then(res => {
         if(res.success) {
             input.value = '';
+            // Reload latest messages
             window.loadMsgs(userId);
-            showToast('Message sent!', 'success');
         } else {
             showToast(res.error || 'Failed to send', 'error');
         }

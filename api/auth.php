@@ -42,12 +42,12 @@ if ($action === "register") {
     // 简单的随机坐标生成
     $range = 1000;
     $success = false;
+    $stmt = $pdo->prepare('INSERT INTO users (username, password_hash, x_pos, y_pos, avatar) VALUES (?, ?, ?, ?, ?)');
 
     do {
         $x = (mt_rand() / mt_getrandmax() * 2 - 1) * $range;
         $y = (mt_rand() / mt_getrandmax() * 2 - 1) * $range;
         try {
-            $stmt = $pdo->prepare('INSERT INTO users (username, password_hash, x_pos, y_pos, avatar) VALUES (?, ?, ?, ?, ?)');
             $stmt->execute([$username, $password_hash, $x, $y, $avatar]);
             $success = true;
         } catch (PDOException $e) {
