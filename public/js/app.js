@@ -200,12 +200,6 @@ async function fetchData() {
 
         // Handle 304 Not Modified
         if (res.status === 304) {
-            // Data hasn't changed.
-            // Check if we need to poll messages for active chat windows?
-            // Actually, if 304, it means max(updated_at) and max(msg_id) hasn't changed.
-            // So we don't need to do anything, unless we have active chats that we want to be super real-time?
-            // But api/data.php includes max_msg_id in ETag. So if a new message came, ETag would change.
-            // So 304 means absolutely nothing new.
             return;
         }
 
@@ -225,17 +219,12 @@ async function fetchData() {
             if (n.id === State.userId) return;
 
             const lastMsgId = n.last_msg_id || 0;
-            const key = 'read_msg_id_' + n.id;
+            // Scoped key for localStorage
+            const key = `read_msg_id_${State.userId}_${n.id}`;
             const readId = parseInt(localStorage.getItem(key) || '0');
 
             // If we have an active chat open for this user, trigger a load
             if (State.activeChats.has(n.id)) {
-                // Determine if we need to fetch new messages
-                // We can check if lastMsgId > known latest in chat?
-                // Or just blindly call loadMsgs(n.id) if the global last_msg_id changed?
-                // For simplicity: If lastMsgId differs from what we think is the last read, reload.
-                // Or just reload always if chat is open and data refreshed.
-                // Let's store the last loaded msg id for the window in a DOM attribute or State.
                 const chatWin = document.getElementById(`chat-${n.id}`);
                 if (chatWin) {
                     const currentMax = parseInt(chatWin.getAttribute('data-last-id') || '0');
@@ -247,13 +236,22 @@ async function fetchData() {
 
             // Check for new incoming messages for toast
             if (lastMsgId > readId) {
-                const lastToastedId = parseInt(sessionStorage.getItem('last_toasted_msg_' + n.id) || '0');
+                // Scoped session storage key as well
+                const toastKey = `last_toasted_msg_${State.userId}_${n.id}`;
+                const lastToastedId = parseInt(sessionStorage.getItem(toastKey) || '0');
                 if (lastMsgId > lastToastedId) {
                     // Only toast if not currently chatting with them
                     if (!State.activeChats.has(n.id)) {
-                        showToast(`New message from ${n.name}`, 'info', 0);
+                        // Pass onClick handler to open chat
+                        showToast(
+                            `New message from ${n.name}`,
+                            'info',
+                            0, // 0 = persistent until clicked or dismissed
+                            () => window.openChat(n.id, encodeURIComponent(n.name)),
+                            { userId: n.id }
+                        );
                     }
-                    sessionStorage.setItem('last_toasted_msg_' + n.id, lastMsgId);
+                    sessionStorage.setItem(toastKey, lastMsgId);
                 }
             }
 
@@ -456,9 +454,7 @@ function showNodeInspector(node) {
         <img src="${node.avatar}" style="width:80px; height:80px; border-radius:50%; margin:0 auto 10px; display:block; border:3px solid #6366f1;">
         <div class="inspector-title" style="text-align:center; font-weight:bold; font-size:1.2em;">${escapeHtml(node.name)}</div>
         <div class="inspector-subtitle" style="text-align:center; color:#94a3b8; font-size:0.9em;">User ID: ${node.id}</div>
-        <div class="inspector-content signature-display" style="background:rgba(0,0,0,0.3); padding:10px; border-radius:8px; margin-top:10px; color:#cbd5e1; font-style:italic;">
-            "${escapeHtml(node.signature)}"
-        </div>
+        <div class="inspector-content signature-display" style="background:rgba(0,0,0,0.3); padding:10px; border-radius:8px; margin-top:10px; color:#cbd5e1; font-style:italic; text-align: center;">${escapeHtml(node.signature)}</div>
         <div class="stat-grid" style="display:grid; grid-template-columns:1fr; gap:8px; margin-top:16px; text-align:center;">
             <div class="stat-box" style="background:rgba(255,255,255,0.05); padding:8px; border-radius:6px;">
                 <div class="stat-val" style="font-weight:bold; font-size:1.2em;">${relationsCount}</div>
@@ -601,7 +597,15 @@ function updateSignature() {
         });
 }
 
-function showToast(message, type = 'success', duration = 3000) {
+/**
+ * Shows a toast notification.
+ * @param {string} message
+ * @param {string} type
+ * @param {number} duration
+ * @param {Function|null} onClick - Optional callback when toast is clicked
+ * @param {Object} dataAttrs - Optional data attributes
+ */
+function showToast(message, type = 'success', duration = 3000, onClick = null, dataAttrs = {}) {
     const container = document.getElementById('toast-list');
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
@@ -612,7 +616,14 @@ function showToast(message, type = 'success', duration = 3000) {
     toast.style.transform = 'none';
     toast.style.marginBottom = '8px';
 
+    // Apply data attributes
+    for (const [key, value] of Object.entries(dataAttrs)) {
+        toast.dataset[key] = value;
+    }
+
     toast.onclick = () => {
+        if (onClick) onClick();
+
         toast.classList.remove('show');
         setTimeout(() => {
             if (toast.parentElement) container.removeChild(toast);
@@ -724,7 +735,8 @@ window.openChat = function(userId, encodedName) {
 
     const node = State.graphData.nodes.find(n => n.id === userId);
     if(node) {
-        localStorage.setItem('read_msg_id_' + userId, node.last_msg_id);
+        // Scoped storage key
+        localStorage.setItem(`read_msg_id_${State.userId}_${userId}`, node.last_msg_id);
         node.hasUnread = false;
         if(node.draw) {
              node.draw(node.img);
@@ -733,6 +745,16 @@ window.openChat = function(userId, encodedName) {
         // Force update of unread UI
         updateUnreadMessagesUI(State.graphData.nodes);
     }
+
+    // Clear relevant toasts
+    const toasts = document.querySelectorAll(`.toast[data-user-id="${userId}"]`);
+    toasts.forEach(t => {
+        t.classList.remove('show');
+        setTimeout(() => {
+            if (t.parentElement) t.parentElement.removeChild(t);
+            updateHudVisibility();
+        }, 300);
+    });
 
     if(document.getElementById(`chat-${userId}`)) return;
 
@@ -771,9 +793,6 @@ window.openChat = function(userId, encodedName) {
             }
         }
     });
-
-    // We removed separate setInterval polling.
-    // Updates are now driven by main fetchData loop calling loadMsgs.
 };
 
 window.closeChat = function(userId) {
@@ -792,9 +811,6 @@ window.loadMsgs = function(userId, beforeId = 0) {
 
     // Logic for loading more (prepend) or loading latest (append/replace)
     const isPagination = beforeId > 0;
-
-    // If it's a pagination load, show loading indicator?
-    // For now simple.
 
     const url = `api/messages.php?action=retrieve&to_id=${userId}` + (isPagination ? `&before_id=${beforeId}` : '');
 
@@ -831,19 +847,6 @@ window.loadMsgs = function(userId, beforeId = 0) {
 
         } else {
             // Initial Load or Update
-            // If just updating, we only append new messages?
-            // The current simple approach is to replace content, but that kills scroll position if user is scrolling up.
-            // But main loop calls this when new message detected.
-            // If we replace innerHTML, we lose scroll position.
-            // Better: only append new messages.
-
-            // Check existing IDs
-            // Actually, the API returns latest 50.
-            // If we have messages, we probably want to append only those > current max id.
-            // But wait, `loadMsgs` without `beforeId` is called on init AND update.
-            // On init, it loads latest 50.
-            // On update, it loads latest 50.
-
             if (container.innerHTML === 'Loading...') {
                 container.innerHTML = html;
                 container.scrollTop = container.scrollHeight;
@@ -877,17 +880,14 @@ window.loadMsgs = function(userId, beforeId = 0) {
         }
 
         // Update Read Status tracking
-        // Get the absolute max id from data (which is sorted asc by default from logic above? wait)
-        // api/messages.php reverse() returns Old -> New.
-        // So last item is newest.
         if (data.length > 0) {
             const newest = data[data.length - 1];
-            // Only update local storage read id if this is the latest batch (not pagination)
             if (!isPagination) {
                 const newMax = newest.id;
                 // Update window attribute
                 document.getElementById(`chat-${userId}`).setAttribute('data-last-id', newMax);
-                localStorage.setItem('read_msg_id_' + userId, newMax);
+                // Scoped storage key
+                localStorage.setItem(`read_msg_id_${State.userId}_${userId}`, newMax);
             }
         }
     });
