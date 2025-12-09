@@ -94,9 +94,33 @@ function initApp(userId) {
     }
 
     // Start Loops
-    fetchData();
-    setInterval(fetchData, CONFIG.pollInterval);
+    syncReadReceipts().then(() => {
+        fetchData();
+        setInterval(fetchData, CONFIG.pollInterval);
+    });
     initStarfield();
+}
+
+/**
+ * Hydrate Local Storage with Read Receipts from Server
+ */
+async function syncReadReceipts() {
+    try {
+        const res = await fetch('api/messages.php?action=sync_read_receipts');
+        const data = await res.json();
+        if (data.success && data.receipts) {
+            data.receipts.forEach(r => {
+                const key = `read_msg_id_${State.userId}_${r.peer_id}`;
+                // Only overwrite if server has a higher value (or if local is missing)
+                const localVal = parseInt(localStorage.getItem(key) || '0');
+                if (r.last_read_msg_id > localVal) {
+                    localStorage.setItem(key, r.last_read_msg_id);
+                }
+            });
+        }
+    } catch (e) {
+        console.error("Hydration failed:", e);
+    }
 }
 
 /**
@@ -735,8 +759,19 @@ window.openChat = function(userId, encodedName) {
 
     const node = State.graphData.nodes.find(n => n.id === userId);
     if(node) {
-        // Scoped storage key
-        localStorage.setItem(`read_msg_id_${State.userId}_${userId}`, node.last_msg_id);
+        // Update local storage
+        const lastId = node.last_msg_id;
+        localStorage.setItem(`read_msg_id_${State.userId}_${userId}`, lastId);
+
+        // Lazy Sync: Update Server
+        if (lastId > 0) {
+            postData('api/messages.php', {
+                action: 'mark_read',
+                peer_id: userId,
+                last_read_msg_id: lastId
+            });
+        }
+
         node.hasUnread = false;
         if(node.draw) {
              node.draw(node.img);
@@ -888,6 +923,13 @@ window.loadMsgs = function(userId, beforeId = 0) {
                 document.getElementById(`chat-${userId}`).setAttribute('data-last-id', newMax);
                 // Scoped storage key
                 localStorage.setItem(`read_msg_id_${State.userId}_${userId}`, newMax);
+
+                // Lazy Sync: Update Server (since we just read new messages)
+                postData('api/messages.php', {
+                    action: 'mark_read',
+                    peer_id: userId,
+                    last_read_msg_id: newMax
+                });
             }
         }
     });
