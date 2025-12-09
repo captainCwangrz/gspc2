@@ -39,26 +39,18 @@ if ($action === "register") {
 
     $password_hash = password_hash($password, PASSWORD_DEFAULT);
 
-    // 简单的随机坐标生成
-    $range = 1000;
-    $success = false;
-    $stmt = $pdo->prepare('INSERT INTO users (username, password_hash, x_pos, y_pos, avatar) VALUES (?, ?, ?, ?, ?)');
-
-    do {
-        $x = (mt_rand() / mt_getrandmax() * 2 - 1) * $range;
-        $y = (mt_rand() / mt_getrandmax() * 2 - 1) * $range;
-        try {
-            $stmt->execute([$username, $password_hash, $x, $y, $avatar]);
-            $success = true;
-        } catch (PDOException $e) {
-            if ($e->getCode() !== "23000") throw $e; // 非重复错误则抛出
-            // 如果是用户名重复
-            if (strpos($e->getMessage(), "username") !== false) {
-                header("Location: ../index.php?error=username_exists");
-                exit;
-            }
+    // Removed random coordinate generation, using 0,0 as placeholders
+    // The frontend engine will handle positioning
+    try {
+        $stmt = $pdo->prepare('INSERT INTO users (username, password_hash, x_pos, y_pos, avatar) VALUES (?, ?, 0, 0, ?)');
+        $stmt->execute([$username, $password_hash, $avatar]);
+    } catch (PDOException $e) {
+        if ($e->getCode() === "23000" && strpos($e->getMessage(), "username") !== false) {
+            header("Location: ../index.php?error=username_exists");
+            exit;
         }
-    } while (!$success);
+        throw $e;
+    }
 
     header("Location: ../index.php?registered=1");
     exit;
