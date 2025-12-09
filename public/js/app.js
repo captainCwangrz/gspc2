@@ -69,13 +69,23 @@ function initApp(userId) {
         })
         .onNodeClick(handleNodeClick)
         .onLinkClick(handleLinkClick)
-        .onBackgroundClick(resetFocus);
+        .onBackgroundClick(resetFocus)
+        // Pin node on drag end
+        .onNodeDragEnd(node => {
+            node.fx = node.x;
+            node.fy = node.y;
+            node.fz = node.z;
+        });
+
+    // Tune Physics Forces
+    Graph.d3Force('charge').strength(-400); // Stronger repulsion (default ~ -30)
+    Graph.d3Force('link').distance(120);    // Longer links (default ~ 30)
 
     // Zoom Controls
     const controls = Graph.controls();
     if (controls) {
         controls.minDistance = 50;
-        controls.maxDistance = 1500;
+        controls.maxDistance = 2000;
         controls.enableDamping = true;
         controls.dampingFactor = 0.1;
     }
@@ -107,7 +117,42 @@ function initApp(userId) {
         fetchData();
         setInterval(fetchData, CONFIG.pollInterval);
     });
-    initStarfield();
+
+    // Start Visual Loops
+    initSciFiBackground();
+    animateLoop();
+}
+
+/**
+ * Global Animation Loop (for Pulse and Background)
+ */
+function animateLoop() {
+    // Animate Pulse
+    const time = Date.now() * 0.002; // Speed
+    const scale = 1.3 + Math.sin(time) * 0.3; // Pulse between 1.0 and 1.6
+
+    State.graphData.nodes.forEach(n => {
+        if(n.pulseMesh) {
+             n.pulseMesh.scale.set(scale, scale, scale);
+             // Optional: rotate the pulse mesh slightly for effect
+             n.pulseMesh.rotation.y += 0.01;
+             n.pulseMesh.rotation.z += 0.005;
+        }
+    });
+
+    // Animate Background (if referenced globally)
+    // For now, initSciFiBackground sets up its own behavior or static elements.
+    // If we want rotating background, we can access scene children.
+    if (Graph) {
+         const scene = Graph.scene();
+         // Find our custom background group if we named it
+         const bg = scene.getObjectByName('scifi-bg');
+         if (bg) {
+             bg.rotation.y += 0.0003;
+         }
+    }
+
+    requestAnimationFrame(animateLoop);
 }
 
 /**
@@ -133,7 +178,7 @@ async function syncReadReceipts() {
 }
 
 /**
- * Custom Node Renderer (Canvas Sprite)
+ * Custom Node Renderer (Canvas Sprite + Pulse for Self)
  */
 function nodeRenderer(node) {
     const size = 64;
@@ -202,6 +247,30 @@ function nodeRenderer(node) {
         if(node.texture) node.texture.dispose();
         if(node.material) node.material.dispose();
     };
+
+    // Special treatment for current user: Add Pulse
+    if (node.id === State.userId) {
+        const group = new THREE.Group();
+        group.add(sprite);
+
+        // Pulse Mesh (Sphere)
+        const geometry = new THREE.SphereGeometry(12, 32, 32);
+        // Emissive material for glow effect
+        const pulseMat = new THREE.MeshBasicMaterial({
+            color: 0x8b5cf6, // Violet 500
+            transparent: true,
+            opacity: 0.3,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+            wireframe: true // Optional: techy look
+        });
+        const pulseMesh = new THREE.Mesh(geometry, pulseMat);
+        group.add(pulseMesh);
+
+        node.pulseMesh = pulseMesh; // Save reference for animation loop
+
+        return group;
+    }
 
     return sprite;
 }
@@ -316,7 +385,14 @@ async function fetchData() {
             if (!State.isFirstLoad) {
                 const oldPosMap = new Map();
                 State.graphData.nodes.forEach(n => {
-                    if (n.x !== undefined) oldPosMap.set(n.id, {x:n.x, y:n.y, z:n.z, vx:n.vx, vy:n.vy, vz:n.vz});
+                    // Save fixed positions too if they exist
+                    if (n.x !== undefined) {
+                        oldPosMap.set(n.id, {
+                            x:n.x, y:n.y, z:n.z,
+                            vx:n.vx, vy:n.vy, vz:n.vz,
+                            fx: n.fx, fy: n.fy, fz: n.fz // Persist pinning
+                        });
+                    }
                 });
                 data.nodes.forEach(n => {
                     const old = oldPosMap.get(n.id);
@@ -688,20 +764,85 @@ function showToast(message, type = 'success', duration = 3000, onClick = null, d
     }
 }
 
-function initStarfield() {
+function initSciFiBackground() {
     setTimeout(() => {
         if(!Graph) return;
         const scene = Graph.scene();
+
+        const group = new THREE.Group();
+        group.name = 'scifi-bg';
+
+        // Helper for soft circular particles
+        const getParticleTexture = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 32;
+            canvas.height = 32;
+            const ctx = canvas.getContext('2d');
+            const grad = ctx.createRadialGradient(16,16,0,16,16,16);
+            grad.addColorStop(0, 'rgba(255,255,255,1)');
+            grad.addColorStop(1, 'rgba(255,255,255,0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0,0,32,32);
+            const tex = new THREE.CanvasTexture(canvas);
+            return tex;
+        };
+        const particleTex = getParticleTexture();
+
+        // 1. Distant Starfield (Small dots)
         const starsGeo = new THREE.BufferGeometry();
-        const starCount = 3000;
+        const starCount = 4000;
         const posArray = new Float32Array(starCount * 3);
         for(let i=0; i<starCount*3; i++) {
-            posArray[i] = (Math.random() - 0.5) * 5000;
+            posArray[i] = (Math.random() - 0.5) * 8000;
         }
         starsGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-        const starsMat = new THREE.PointsMaterial({size: 2, color: 0xffffff, transparent: true, opacity: 0.5 });
+        const starsMat = new THREE.PointsMaterial({size: 3, color: 0x8899aa, transparent: true, opacity: 0.8, map: particleTex, depthWrite: false });
         const starField = new THREE.Points(starsGeo, starsMat);
-        scene.add(starField);
+        group.add(starField);
+
+        // 2. Nebula/Dust Particles (Larger, colored)
+        const dustGeo = new THREE.BufferGeometry();
+        const dustCount = 800;
+        const dustPos = new Float32Array(dustCount * 3);
+        const dustColors = new Float32Array(dustCount * 3);
+        const color1 = new THREE.Color(0x6366f1); // Indigo
+        const color2 = new THREE.Color(0xec4899); // Pink
+
+        for(let i=0; i<dustCount; i++) {
+            const i3 = i*3;
+            // Spiral distribution
+            const r = Math.random() * 4000;
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.random() * Math.PI; // Spherical
+
+            dustPos[i3] = r * Math.sin(phi) * Math.cos(theta);
+            dustPos[i3+1] = r * Math.sin(phi) * Math.sin(theta);
+            dustPos[i3+2] = r * Math.cos(phi);
+
+            // Mix colors
+            const mix = Math.random();
+            const c = color1.clone().lerp(color2, mix);
+            dustColors[i3] = c.r;
+            dustColors[i3+1] = c.g;
+            dustColors[i3+2] = c.b;
+        }
+
+        dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+        dustGeo.setAttribute('color', new THREE.BufferAttribute(dustColors, 3));
+
+        const dustMat = new THREE.PointsMaterial({
+            size: 50,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.3,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+            map: particleTex
+        });
+        const dustField = new THREE.Points(dustGeo, dustMat);
+        group.add(dustField);
+
+        scene.add(group);
     }, 1000);
 }
 
