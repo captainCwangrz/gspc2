@@ -119,36 +119,37 @@ function initApp(userId) {
     });
 
     // Start Visual Loops
-    initSciFiBackground();
+    initMilkyWayBackground();
     animateLoop();
 }
 
 /**
- * Global Animation Loop (for Pulse and Background)
+ * Global Animation Loop (for Halo and Background)
  */
 function animateLoop() {
-    // Animate Pulse
-    const time = Date.now() * 0.002; // Speed
-    const scale = 1.3 + Math.sin(time) * 0.3; // Pulse between 1.0 and 1.6
+    // Animate Halo
+    const time = Date.now() * 0.0015; // Speed
+    // Breathing: Opacity between 0.3 and 0.6
+    const opacity = 0.45 + Math.sin(time) * 0.15;
+    // Slight scale breathing: 1.0 to 1.1 relative to base scale
+    const scaleMod = 1.0 + Math.sin(time) * 0.05;
 
     State.graphData.nodes.forEach(n => {
-        if(n.pulseMesh) {
-             n.pulseMesh.scale.set(scale, scale, scale);
-             // Optional: rotate the pulse mesh slightly for effect
-             n.pulseMesh.rotation.y += 0.01;
-             n.pulseMesh.rotation.z += 0.005;
+        if(n.haloSprite) {
+             n.haloSprite.material.opacity = opacity;
+             // Base scale is 200 (approx 2.5-3x node size of 64ish * sprite scale 16)
+             // Node sprite scale is 16.
+             // Halo needs to be bigger.
+             n.haloSprite.scale.set(60 * scaleMod, 60 * scaleMod, 1);
         }
     });
 
-    // Animate Background (if referenced globally)
-    // For now, initSciFiBackground sets up its own behavior or static elements.
-    // If we want rotating background, we can access scene children.
+    // Animate Background (Rotate the galaxy slowly)
     if (Graph) {
          const scene = Graph.scene();
-         // Find our custom background group if we named it
-         const bg = scene.getObjectByName('scifi-bg');
+         const bg = scene.getObjectByName('milky-way-bg');
          if (bg) {
-             bg.rotation.y += 0.0003;
+             bg.rotation.y += 0.0001; // Very slow rotation
          }
     }
 
@@ -178,7 +179,7 @@ async function syncReadReceipts() {
 }
 
 /**
- * Custom Node Renderer (Canvas Sprite + Pulse for Self)
+ * Custom Node Renderer (Canvas Sprite + Halo for Self)
  */
 function nodeRenderer(node) {
     const size = 64;
@@ -221,7 +222,7 @@ function nodeRenderer(node) {
         ctx.stroke();
     };
 
-    // Clean up previous texture if it exists to prevent memory leak
+    // Clean up previous texture if it exists
     if (node.texture) {
         node.texture.dispose();
     }
@@ -234,40 +235,64 @@ function nodeRenderer(node) {
     const img = new Image();
     img.crossOrigin = "Anonymous";
     img.src = node.avatar;
-    // Trigger update when image loads
     img.onload = () => { draw(img); texture.needsUpdate = true; };
     img.onerror = () => { draw(null); texture.needsUpdate = true; };
 
-    // Save draw function to update it later
     node.draw = draw;
     node.texture = texture;
     node.img = img;
-    // We add a dispose method to node to clean up manually if needed
     node.dispose = () => {
         if(node.texture) node.texture.dispose();
         if(node.material) node.material.dispose();
+        if(node.haloTexture) node.haloTexture.dispose();
+        if(node.haloMaterial) node.haloMaterial.dispose();
     };
 
-    // Special treatment for current user: Add Pulse
+    // Strategy C: The Halo (Billboarded Glow Sprite)
     if (node.id === State.userId) {
         const group = new THREE.Group();
-        group.add(sprite);
 
-        // Pulse Mesh (Sphere)
-        const geometry = new THREE.SphereGeometry(12, 32, 32);
-        // Emissive material for glow effect
-        const pulseMat = new THREE.MeshBasicMaterial({
-            color: 0x8b5cf6, // Violet 500
+        // 1. The Halo (Behind)
+        const haloCanvas = document.createElement('canvas');
+        haloCanvas.width = 64;
+        haloCanvas.height = 64;
+        const hCtx = haloCanvas.getContext('2d');
+
+        // Soft gradient glow
+        const grad = hCtx.createRadialGradient(32,32,0,32,32,32);
+        grad.addColorStop(0, 'rgba(139, 92, 246, 0.8)'); // Violet center
+        grad.addColorStop(0.5, 'rgba(139, 92, 246, 0.3)');
+        grad.addColorStop(1, 'rgba(139, 92, 246, 0)'); // Fade out
+
+        hCtx.fillStyle = grad;
+        hCtx.fillRect(0,0,64,64);
+
+        const haloTex = new THREE.CanvasTexture(haloCanvas);
+        const haloMat = new THREE.SpriteMaterial({
+            map: haloTex,
             transparent: true,
-            opacity: 0.3,
-            depthWrite: false,
-            blending: THREE.AdditiveBlending,
-            wireframe: true // Optional: techy look
+            opacity: 0.5,
+            depthWrite: false // Don't block other objects
         });
-        const pulseMesh = new THREE.Mesh(geometry, pulseMat);
-        group.add(pulseMesh);
+        const haloSprite = new THREE.Sprite(haloMat);
 
-        node.pulseMesh = pulseMesh; // Save reference for animation loop
+        // Set initial scale (will be animated)
+        haloSprite.scale.set(50, 50, 1);
+
+        // Add halo first so it renders behind?
+        // With sprites, render order depends on Z-depth usually,
+        // but we can force render order or just rely on transparency.
+        // Putting it in group.
+        group.add(haloSprite);
+        group.add(sprite); // Avatar on top (conceptually)
+
+        // Ensure avatar renders on top of halo if they fight
+        sprite.renderOrder = 10;
+        haloSprite.renderOrder = 1;
+
+        node.haloSprite = haloSprite;
+        node.haloTexture = haloTex;
+        node.haloMaterial = haloMat;
 
         return group;
     }
@@ -300,14 +325,9 @@ async function fetchData() {
 
         const res = await fetch('api/data.php', { headers });
 
-        // Handle 304 Not Modified
-        if (res.status === 304) {
-            return;
-        }
-
+        if (res.status === 304) return;
         if (!res.ok) return;
 
-        // Update ETag
         const etag = res.headers.get('ETag');
         if (etag) State.etag = etag;
 
@@ -320,11 +340,9 @@ async function fetchData() {
             if (n.id === State.userId) return;
 
             const lastMsgId = n.last_msg_id || 0;
-            // Scoped key for localStorage
             const key = `read_msg_id_${State.userId}_${n.id}`;
             const readId = parseInt(localStorage.getItem(key) || '0');
 
-            // If we have an active chat open for this user, trigger a load
             if (State.activeChats.has(n.id)) {
                 const chatWin = document.getElementById(`chat-${n.id}`);
                 if (chatWin) {
@@ -335,19 +353,15 @@ async function fetchData() {
                 }
             }
 
-            // Check for new incoming messages for toast
             if (lastMsgId > readId) {
-                // Scoped session storage key as well
                 const toastKey = `last_toasted_msg_${State.userId}_${n.id}`;
                 const lastToastedId = parseInt(sessionStorage.getItem(toastKey) || '0');
                 if (lastMsgId > lastToastedId) {
-                    // Only toast if not currently chatting with them
                     if (!State.activeChats.has(n.id)) {
-                        // Pass onClick handler to open chat
                         showToast(
                             `New message from ${n.name}`,
                             'info',
-                            0, // 0 = persistent until clicked or dismissed
+                            0,
                             () => window.openChat(n.id, encodeURIComponent(n.name)),
                             { userId: n.id }
                         );
@@ -355,8 +369,6 @@ async function fetchData() {
                     sessionStorage.setItem(toastKey, lastMsgId);
                 }
             }
-
-            // Only mark as unread if chat window is NOT open
             n.hasUnread = (lastMsgId > readId) && !State.activeChats.has(n.id);
         });
 
@@ -381,16 +393,14 @@ async function fetchData() {
             JSON.stringify(currentNodesSimple) !== JSON.stringify(newNodesSimple) ||
             JSON.stringify(currentLinksSimple) !== JSON.stringify(data.links)) {
 
-            // Preserve positions if not first load
             if (!State.isFirstLoad) {
                 const oldPosMap = new Map();
                 State.graphData.nodes.forEach(n => {
-                    // Save fixed positions too if they exist
                     if (n.x !== undefined) {
                         oldPosMap.set(n.id, {
                             x:n.x, y:n.y, z:n.z,
                             vx:n.vx, vy:n.vy, vz:n.vz,
-                            fx: n.fx, fy: n.fy, fz: n.fz // Persist pinning
+                            fx: n.fx, fy: n.fy, fz: n.fz
                         });
                     }
                 });
@@ -400,16 +410,12 @@ async function fetchData() {
                 });
             }
 
-            // Update graph data
             State.graphData = { nodes: data.nodes, links: data.links };
             Graph.graphData(State.graphData);
 
-            // UI Initial Setup
-            // Update own profile info
             const me = data.nodes.find(n => n.id === State.userId);
             if (me) {
                 if (State.isFirstLoad) document.getElementById('my-avatar').src = me.avatar;
-
                 const sigEl = document.getElementById('my-signature');
                 if (sigEl) sigEl.textContent = me.signature || "No signature set.";
             }
@@ -497,7 +503,7 @@ function resetFocus() {
 }
 
 /**
- * UI Generators (Inspectors)
+ * UI Generators
  */
 function showNodeInspector(node) {
     const panel = document.getElementById('inspector-panel');
@@ -524,7 +530,6 @@ function showNodeInspector(node) {
 
         if(myRel) {
             const style = CONFIG.relStyles[myRel.type] || { color: '#fff' };
-            // Generate options for updating, marking the current one as selected
             const options = RELATION_TYPES.map(t =>
                 `<option value="${t}" ${myRel.type === t ? 'selected' : ''}>${t}</option>`
             ).join('');
@@ -710,26 +715,16 @@ function updateSignature() {
         });
 }
 
-/**
- * Shows a toast notification.
- * @param {string} message
- * @param {string} type
- * @param {number} duration
- * @param {Function|null} onClick - Optional callback when toast is clicked
- * @param {Object} dataAttrs - Optional data attributes
- */
 function showToast(message, type = 'success', duration = 3000, onClick = null, dataAttrs = {}) {
     const container = document.getElementById('toast-list');
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.textContent = message;
     
-    // Style adjustments for being in the list
     toast.style.position = 'relative';
     toast.style.transform = 'none';
     toast.style.marginBottom = '8px';
 
-    // Apply data attributes
     for (const [key, value] of Object.entries(dataAttrs)) {
         toast.dataset[key] = value;
     }
@@ -764,13 +759,16 @@ function showToast(message, type = 'success', duration = 3000, onClick = null, d
     }
 }
 
-function initSciFiBackground() {
+/**
+ * Strategy A: Procedural Milky Way
+ */
+function initMilkyWayBackground() {
     setTimeout(() => {
         if(!Graph) return;
         const scene = Graph.scene();
 
         const group = new THREE.Group();
-        group.name = 'scifi-bg';
+        group.name = 'milky-way-bg';
 
         // Helper for soft circular particles
         const getParticleTexture = () => {
@@ -788,59 +786,80 @@ function initSciFiBackground() {
         };
         const particleTex = getParticleTexture();
 
-        // 1. Distant Starfield (Small dots)
+        // 1. Distant Background Stars (Sphere)
         const starsGeo = new THREE.BufferGeometry();
-        const starCount = 4000;
+        const starCount = 5000;
         const posArray = new Float32Array(starCount * 3);
         for(let i=0; i<starCount*3; i++) {
-            posArray[i] = (Math.random() - 0.5) * 8000;
+            posArray[i] = (Math.random() - 0.5) * 10000;
         }
         starsGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-        const starsMat = new THREE.PointsMaterial({size: 3, color: 0x8899aa, transparent: true, opacity: 0.8, map: particleTex, depthWrite: false });
+        const starsMat = new THREE.PointsMaterial({
+            size: 4,
+            color: 0xaaaaaa,
+            transparent: true,
+            opacity: 0.8,
+            map: particleTex,
+            depthWrite: false
+        });
         const starField = new THREE.Points(starsGeo, starsMat);
         group.add(starField);
 
-        // 2. Nebula/Dust Particles (Larger, colored)
-        const dustGeo = new THREE.BufferGeometry();
-        const dustCount = 800;
-        const dustPos = new Float32Array(dustCount * 3);
-        const dustColors = new Float32Array(dustCount * 3);
-        const color1 = new THREE.Color(0x6366f1); // Indigo
-        const color2 = new THREE.Color(0xec4899); // Pink
+        // 2. The Galactic Band (Disk/Cylinder)
+        const galaxyGeo = new THREE.BufferGeometry();
+        const galaxyCount = 3000;
+        const gPos = new Float32Array(galaxyCount * 3);
+        const gColors = new Float32Array(galaxyCount * 3);
 
-        for(let i=0; i<dustCount; i++) {
+        const c1 = new THREE.Color(0xfdf4dc); // Cream/Yellow center
+        const c2 = new THREE.Color(0x60a5fa); // Blue outer
+        const c3 = new THREE.Color(0xd8b4fe); // Purple dust
+
+        for(let i=0; i<galaxyCount; i++) {
             const i3 = i*3;
-            // Spiral distribution
-            const r = Math.random() * 4000;
+            // Radius: concentrated near center, spreading out
+            const r = Math.random() * 4000 + 500;
+            // Angle: full circle
             const theta = Math.random() * Math.PI * 2;
-            const phi = Math.random() * Math.PI; // Spherical
+            // Height: flatten it out
+            const y = (Math.random() - 0.5) * 400;
 
-            dustPos[i3] = r * Math.sin(phi) * Math.cos(theta);
-            dustPos[i3+1] = r * Math.sin(phi) * Math.sin(theta);
-            dustPos[i3+2] = r * Math.cos(phi);
+            gPos[i3] = r * Math.cos(theta);
+            gPos[i3+1] = y;
+            gPos[i3+2] = r * Math.sin(theta);
 
-            // Mix colors
-            const mix = Math.random();
-            const c = color1.clone().lerp(color2, mix);
-            dustColors[i3] = c.r;
-            dustColors[i3+1] = c.g;
-            dustColors[i3+2] = c.b;
+            // Color based on radius (Center = warm, Outer = cool/dusty)
+            const mix = Math.min(1, r / 4000);
+            let c;
+            if(Math.random() > 0.5) {
+                c = c1.clone().lerp(c2, mix);
+            } else {
+                c = c1.clone().lerp(c3, mix);
+            }
+            gColors[i3] = c.r;
+            gColors[i3+1] = c.g;
+            gColors[i3+2] = c.b;
         }
 
-        dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
-        dustGeo.setAttribute('color', new THREE.BufferAttribute(dustColors, 3));
+        galaxyGeo.setAttribute('position', new THREE.BufferAttribute(gPos, 3));
+        galaxyGeo.setAttribute('color', new THREE.BufferAttribute(gColors, 3));
 
-        const dustMat = new THREE.PointsMaterial({
-            size: 50,
+        const galaxyMat = new THREE.PointsMaterial({
+            size: 40,
             vertexColors: true,
             transparent: true,
-            opacity: 0.3,
+            opacity: 0.2, // Faint fog look
             blending: THREE.AdditiveBlending,
             depthWrite: false,
             map: particleTex
         });
-        const dustField = new THREE.Points(dustGeo, dustMat);
-        group.add(dustField);
+        const galaxy = new THREE.Points(galaxyGeo, galaxyMat);
+
+        // Tilt the galaxy for better view
+        galaxy.rotation.z = Math.PI / 6; // 30 deg tilt
+        galaxy.rotation.x = Math.PI / 8;
+
+        group.add(galaxy);
 
         scene.add(group);
     }, 1000);
@@ -913,11 +932,9 @@ window.openChat = function(userId, encodedName) {
 
     const node = State.graphData.nodes.find(n => n.id === userId);
     if(node) {
-        // Update local storage
         const lastId = node.last_msg_id;
         localStorage.setItem(`read_msg_id_${State.userId}_${userId}`, lastId);
 
-        // Lazy Sync: Update Server
         if (lastId > 0) {
             postData('api/messages.php', {
                 action: 'mark_read',
@@ -931,11 +948,9 @@ window.openChat = function(userId, encodedName) {
              node.draw(node.img);
              node.texture.needsUpdate = true;
         }
-        // Force update of unread UI
         updateUnreadMessagesUI(State.graphData.nodes);
     }
 
-    // Clear relevant toasts
     const toasts = document.querySelectorAll(`.toast[data-user-id="${userId}"]`);
     toasts.forEach(t => {
         t.classList.remove('show');
@@ -950,7 +965,7 @@ window.openChat = function(userId, encodedName) {
     const div = document.createElement('div');
     div.id = `chat-${userId}`;
     div.className = 'chat-window';
-    div.setAttribute('data-last-id', '0'); // Init last id
+    div.setAttribute('data-last-id', '0');
     div.innerHTML = `
         <div class="chat-header">
             <span>${escapeHtml(userName)}</span>
@@ -964,19 +979,15 @@ window.openChat = function(userId, encodedName) {
     `;
     chatHud.appendChild(div);
 
-    // Initial load
     window.loadMsgs(userId);
 
-    // Add scroll listener for pagination
     const msgsContainer = document.getElementById(`msgs-${userId}`);
     msgsContainer.addEventListener('scroll', () => {
         if(msgsContainer.scrollTop === 0) {
-            // Load more
-            // Get oldest ID from the first child
             const firstMsg = msgsContainer.firstElementChild;
             if (firstMsg) {
                 const oldestId = parseInt(firstMsg.getAttribute('data-id'));
-                if (oldestId > 1) { // 1 is theoretical min
+                if (oldestId > 1) {
                     window.loadMsgs(userId, oldestId);
                 }
             }
@@ -998,7 +1009,6 @@ window.loadMsgs = function(userId, beforeId = 0) {
     const container = document.getElementById(`msgs-${userId}`);
     if(!container) return;
 
-    // Logic for loading more (prepend) or loading latest (append/replace)
     const isPagination = beforeId > 0;
 
     const url = `api/messages.php?action=retrieve&to_id=${userId}` + (isPagination ? `&before_id=${beforeId}` : '');
@@ -1009,11 +1019,9 @@ window.loadMsgs = function(userId, beforeId = 0) {
         if(data.error) return;
 
         if (data.length === 0 && isPagination) {
-             // No more older messages
              return;
         }
 
-        // Generate HTML
         const html = data.map(m => `
             <div class="msg-row" data-id="${m.id}" style="text-align:${m.from_id == State.userId ? 'right' : 'left'}; margin-bottom:4px;">
                 <span style="background:${m.from_id == State.userId ? '#6366f1' : '#334155'}; padding:4px 8px; border-radius:4px; display:inline-block; max-width:80%; word-break:break-word;">
@@ -1023,28 +1031,17 @@ window.loadMsgs = function(userId, beforeId = 0) {
         `).join('');
 
         if (isPagination) {
-            // Save scroll height before appending
             const oldHeight = container.scrollHeight;
-            const oldTop = container.scrollTop;
-
-            // Prepend content
             container.insertAdjacentHTML('afterbegin', html);
-
-            // Adjust scroll position to keep view stable
-            // New scroll top = new height - old height + old top (which was 0 usually)
             container.scrollTop = container.scrollHeight - oldHeight;
 
         } else {
-            // Initial Load or Update
             if (container.innerHTML === 'Loading...') {
                 container.innerHTML = html;
                 container.scrollTop = container.scrollHeight;
             } else {
-                // Determine the last ID we currently have
                 const lastChild = container.lastElementChild;
                 const currentMaxId = lastChild ? parseInt(lastChild.getAttribute('data-id')) : 0;
-
-                // Filter data for new messages
                 const newMsgs = data.filter(m => m.id > currentMaxId);
 
                 if (newMsgs.length > 0) {
@@ -1057,7 +1054,6 @@ window.loadMsgs = function(userId, beforeId = 0) {
                     `).join('');
                     container.insertAdjacentHTML('beforeend', newHtml);
 
-                    // Auto scroll to bottom only if user was near bottom
                     const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
                     if (isNearBottom) {
                         container.scrollTop = container.scrollHeight;
@@ -1068,17 +1064,13 @@ window.loadMsgs = function(userId, beforeId = 0) {
             }
         }
 
-        // Update Read Status tracking
         if (data.length > 0) {
             const newest = data[data.length - 1];
             if (!isPagination) {
                 const newMax = newest.id;
-                // Update window attribute
                 document.getElementById(`chat-${userId}`).setAttribute('data-last-id', newMax);
-                // Scoped storage key
                 localStorage.setItem(`read_msg_id_${State.userId}_${userId}`, newMax);
 
-                // Lazy Sync: Update Server (since we just read new messages)
                 postData('api/messages.php', {
                     action: 'mark_read',
                     peer_id: userId,
@@ -1104,7 +1096,6 @@ window.sendMsg = function(e, userId) {
     .then(res => {
         if(res.success) {
             input.value = '';
-            // Reload latest messages
             window.loadMsgs(userId);
         } else {
             showToast(res.error || 'Failed to send', 'error');
