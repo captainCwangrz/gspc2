@@ -236,7 +236,6 @@ async function fetchData() {
         const data = await res.json();
 
         updateRequestsUI(data.requests);
-        updateUnreadMessagesUI(data.nodes);
 
         // --- Notification & Chat Logic ---
         data.nodes.forEach(n => {
@@ -281,6 +280,8 @@ async function fetchData() {
 
             n.hasUnread = (lastMsgId > readId);
         });
+
+        updateUnreadMessagesUI(data.nodes);
 
         // Check for updates to minimize graph re-renders
         const currentNodesSimple = State.graphData.nodes.map(n => ({
