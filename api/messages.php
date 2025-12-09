@@ -53,6 +53,33 @@ try {
         exit;
     }
 
+    // Sync Read Receipts (Hydration)
+    if ($action === "sync_read_receipts") {
+        $stmt = $pdo->prepare('SELECT peer_id, last_read_msg_id FROM read_receipts WHERE user_id = ?');
+        $stmt->execute([$user_id]);
+        $data = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        echo json_encode(['success' => true, 'receipts' => $data]);
+        exit;
+    }
+
+    // Mark as Read
+    if ($action === "mark_read") {
+        $peer_id = (int)($_POST["peer_id"] ?? 0);
+        $last_read_id = (int)($_POST["last_read_msg_id"] ?? 0);
+
+        if ($peer_id && $last_read_id > 0) {
+            $sql = "INSERT INTO read_receipts (user_id, peer_id, last_read_msg_id) VALUES (?, ?, ?)
+                    ON DUPLICATE KEY UPDATE last_read_msg_id = GREATEST(last_read_msg_id, VALUES(last_read_msg_id))";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$user_id, $peer_id, $last_read_id]);
+            echo json_encode(['success' => true]);
+        } else {
+            // It's acceptable to just silently fail or return success for 0
+            echo json_encode(['success' => true]);
+        }
+        exit;
+    }
+
     // Retrieve Message History
     if ($action === "retrieve") {
         $to_id = (int)($_GET["to_id"] ?? 0);

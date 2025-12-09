@@ -71,6 +71,17 @@ class Database {
                 $pdo->exec("ALTER TABLE messages ADD INDEX idx_msg_pagination (from_id, to_id, id)");
             }
 
+            // Create read_receipts table if not exists (Lazy Migration)
+            $pdo->exec("CREATE TABLE IF NOT EXISTS read_receipts (
+                user_id INT NOT NULL,
+                peer_id INT NOT NULL,
+                last_read_msg_id INT NOT NULL DEFAULT 0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (user_id, peer_id),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (peer_id) REFERENCES users(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB");
+
         } catch (Exception $e) {
             // Suppress migration errors to avoid breaking the app if something weird happens,
             // but log them.
@@ -126,6 +137,16 @@ class Database {
                     FOREIGN KEY (from_id) REFERENCES users(id) ON DELETE CASCADE,
                     FOREIGN KEY (to_id) REFERENCES users(id) ON DELETE CASCADE,
                     INDEX idx_msg_pagination (from_id, to_id, id)
+                ) ENGINE=InnoDB;
+
+                CREATE TABLE IF NOT EXISTS read_receipts (
+                    user_id INT NOT NULL,
+                    peer_id INT NOT NULL,
+                    last_read_msg_id INT NOT NULL DEFAULT 0,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_id, peer_id),
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (peer_id) REFERENCES users(id) ON DELETE CASCADE
                 ) ENGINE=InnoDB;
             SQL;
             self::$pdo->exec($sql);
