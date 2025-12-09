@@ -29,7 +29,6 @@ if(!isset($_SESSION["user_id"])) {
     </script>
 </head>
 <body>
-    <div id="toast-container"></div>
     <div id="loader"><h2>Connecting to Gossip Neural Net...</h2></div>
     <div id="3d-graph"></div>
 
@@ -47,9 +46,10 @@ if(!isset($_SESSION["user_id"])) {
                 <div class="status-label">Status: Online</div>
             </div>
         </div>
-        <div id="my-signature" style="margin-bottom: 10px; font-style: italic; color: #cbd5e1; font-size: 0.9em;"></div>
+        <div id="my-signature" class="signature-display" style="margin-bottom: 10px; font-style: italic; color: #cbd5e1; font-size: 0.9em;"></div>
         <div class="signature-container">
-            <input type="text" id="signature-input" placeholder="Update your signature...">
+            <textarea id="signature-input" rows="3" placeholder="Update your signature..." maxlength="160"></textarea>
+            <div id="signature-counter" style="text-align: right; color: #94a3b8; font-size: 0.8em; margin-bottom: 5px;">0 / 160</div>
             <button id="signature-update-btn">Update Signature</button>
         </div>
         <div class="logout-container">
@@ -59,9 +59,12 @@ if(!isset($_SESSION["user_id"])) {
     </div>
 
     <div id="notif-hud" class="hud-panel">
-        <div class="requests-header">⚠️ Incoming Requests</div>
-        <div id="req-list"></div>
-        <div id="unread-msgs-container" class="unread-messages-container">
+        <div id="toast-list"></div>
+        <div id="requests-container" style="display:none;">
+            <div class="requests-header">⚠️ Incoming Requests</div>
+            <div id="req-list"></div>
+        </div>
+        <div id="unread-msgs-container" class="unread-messages-container" style="display:none;">
              <div class="unread-messages-header">📬 Unread Messages</div>
              <div id="unread-msgs-list"></div>
         </div>
