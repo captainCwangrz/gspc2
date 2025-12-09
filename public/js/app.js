@@ -85,6 +85,13 @@ function initApp(userId) {
 
     // Initialize Signature Update Listener
     document.getElementById('signature-update-btn').addEventListener('click', updateSignature);
+    const sigInput = document.getElementById('signature-input');
+    if (sigInput) {
+        sigInput.addEventListener('input', (e) => {
+            const len = e.target.value.length;
+            document.getElementById('signature-counter').innerText = `${len} / 160`;
+        });
+    }
 
     // Start Loops
     fetchData();
@@ -126,17 +133,6 @@ function nodeRenderer(node) {
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(node.name.charAt(0).toUpperCase(), size/2, size/2);
-        }
-
-        // Notification Badge (Red dot)
-        if (node.hasUnread) {
-            ctx.beginPath();
-            ctx.arc(size - 10, 10, 8, 0, 2 * Math.PI);
-            ctx.fillStyle = '#ef4444';
-            ctx.fill();
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 2;
-            ctx.stroke();
         }
 
         // Border ring
@@ -226,6 +222,8 @@ async function fetchData() {
 
         // --- Notification & Chat Logic ---
         data.nodes.forEach(n => {
+            if (n.id === State.userId) return;
+
             const lastMsgId = n.last_msg_id || 0;
             const key = 'read_msg_id_' + n.id;
             const readId = parseInt(localStorage.getItem(key) || '0');
@@ -458,7 +456,7 @@ function showNodeInspector(node) {
         <img src="${node.avatar}" style="width:80px; height:80px; border-radius:50%; margin:0 auto 10px; display:block; border:3px solid #6366f1;">
         <div class="inspector-title" style="text-align:center; font-weight:bold; font-size:1.2em;">${escapeHtml(node.name)}</div>
         <div class="inspector-subtitle" style="text-align:center; color:#94a3b8; font-size:0.9em;">User ID: ${node.id}</div>
-        <div class="inspector-content" style="background:rgba(0,0,0,0.3); padding:10px; border-radius:8px; margin-top:10px; color:#cbd5e1; font-style:italic;">
+        <div class="inspector-content signature-display" style="background:rgba(0,0,0,0.3); padding:10px; border-radius:8px; margin-top:10px; color:#cbd5e1; font-style:italic;">
             "${escapeHtml(node.signature)}"
         </div>
         <div class="stat-grid" style="display:grid; grid-template-columns:1fr; gap:8px; margin-top:16px; text-align:center;">
@@ -494,8 +492,25 @@ function showLinkInspector(link) {
     `;
 }
 
+function updateHudVisibility() {
+    const hud = document.getElementById('notif-hud');
+    const toastList = document.getElementById('toast-list');
+    const reqList = document.getElementById('requests-container');
+    const unreadList = document.getElementById('unread-msgs-container');
+
+    const hasToasts = toastList.children.length > 0;
+    const hasReqs = reqList.style.display !== 'none';
+    const hasUnreads = unreadList.style.display !== 'none';
+
+    if (hasToasts || hasReqs || hasUnreads) {
+        hud.style.display = 'block';
+    } else {
+        hud.style.display = 'none';
+    }
+}
+
 function updateRequestsUI(requests) {
-    const container = document.getElementById('notif-hud');
+    const container = document.getElementById('requests-container');
     const list = document.getElementById('req-list');
 
     const reqHash = JSON.stringify(requests);
@@ -504,6 +519,7 @@ function updateRequestsUI(requests) {
 
     if(!requests || requests.length === 0) {
         container.style.display = 'none';
+        updateHudVisibility();
         return;
     }
 
@@ -517,6 +533,7 @@ function updateRequestsUI(requests) {
             </div>
         </div>
     `).join('');
+    updateHudVisibility();
 }
 
 function updateUnreadMessagesUI(nodes) {
@@ -526,15 +543,17 @@ function updateUnreadMessagesUI(nodes) {
 
     if (unreadNodes.length === 0) {
         container.style.display = 'none';
+        updateHudVisibility();
         return;
     }
 
     container.style.display = 'block';
     list.innerHTML = unreadNodes.map(n => `
-        <div class="unread-item" onclick="window.openChat(${n.id}, '${encodeURIComponent(n.name)}')" style="cursor:pointer; background:rgba(56,189,248,0.1); padding:8px; margin-bottom:8px; border-radius:6px; font-size:0.9em;">
+        <div class="unread-item toast info show" onclick="window.openChat(${n.id}, '${encodeURIComponent(n.name)}')" style="cursor:pointer; position: relative; transform: none; margin-bottom: 8px;">
             New message from <strong>${escapeHtml(n.name)}</strong>
         </div>
     `).join('');
+    updateHudVisibility();
 }
 
 function handleSearch(e) {
@@ -583,19 +602,26 @@ function updateSignature() {
 }
 
 function showToast(message, type = 'success', duration = 3000) {
-    const container = document.getElementById('toast-container');
+    const container = document.getElementById('toast-list');
     const toast = document.createElement('div');
     toast.className = `toast ${type}`;
     toast.textContent = message;
     
+    // Style adjustments for being in the list
+    toast.style.position = 'relative';
+    toast.style.transform = 'none';
+    toast.style.marginBottom = '8px';
+
     toast.onclick = () => {
         toast.classList.remove('show');
         setTimeout(() => {
             if (toast.parentElement) container.removeChild(toast);
+            updateHudVisibility();
         }, 300);
     };
 
     container.appendChild(toast);
+    updateHudVisibility();
 
     setTimeout(() => {
         toast.classList.add('show');
@@ -607,6 +633,7 @@ function showToast(message, type = 'success', duration = 3000) {
                 toast.classList.remove('show');
                 setTimeout(() => {
                     if (toast.parentElement) container.removeChild(toast);
+                    updateHudVisibility();
                 }, 300);
             }
         }, duration);
@@ -703,6 +730,8 @@ window.openChat = function(userId, encodedName) {
              node.draw(node.img);
              node.texture.needsUpdate = true;
         }
+        // Force update of unread UI
+        updateUnreadMessagesUI(State.graphData.nodes);
     }
 
     if(document.getElementById(`chat-${userId}`)) return;

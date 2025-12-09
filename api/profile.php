@@ -23,7 +23,6 @@ $new_signature = trim($_POST['signature'] ?? '');
 
 // Sanitization
 $new_signature = strip_tags($new_signature);
-$new_signature = preg_replace('/\s+/', ' ', $new_signature); // Collapse whitespace
 
 if (empty($new_signature)) {
     http_response_code(400);
