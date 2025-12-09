@@ -278,7 +278,8 @@ async function fetchData() {
                 }
             }
 
-            n.hasUnread = (lastMsgId > readId);
+            // Only mark as unread if chat window is NOT open
+            n.hasUnread = (lastMsgId > readId) && !State.activeChats.has(n.id);
         });
 
         updateUnreadMessagesUI(data.nodes);
