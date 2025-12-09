@@ -66,7 +66,7 @@ try {
     // --- Full Data Fetch (Only if Changed) ---
 
     // 1. Get all nodes
-    $nodes = $pdo->query('SELECT id, username, avatar, signature, x_pos, y_pos FROM users')->fetchAll();
+    $nodes = $pdo->query('SELECT id, username, avatar, signature FROM users')->fetchAll();
 
     // 2. Get all relationships
     $edges = $pdo->query('SELECT from_id, to_id, type FROM relationships')->fetchAll();
@@ -105,9 +105,6 @@ try {
             'name' => $u['username'],
             'avatar' => "assets/" . $u['avatar'],
             'signature' => $u['signature'] ?? 'No gossip yet.',
-            'x' => (float)$u['x_pos'],
-            'y' => (float)$u['y_pos'],
-            'z' => 0,
             'val' => 1,
             'last_msg_id' => isset($lastMessages[$uid]) ? (int)$lastMessages[$uid] : 0
         ];

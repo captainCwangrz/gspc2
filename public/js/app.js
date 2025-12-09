@@ -93,6 +93,15 @@ function initApp(userId) {
         });
     }
 
+    // Zoom to Me Button
+    const zoomBtn = document.getElementById('zoom-btn');
+    if (zoomBtn) {
+        zoomBtn.addEventListener('click', () => {
+            const myNode = State.graphData.nodes.find(n => n.id === State.userId);
+            if (myNode) handleNodeClick(myNode);
+        });
+    }
+
     // Start Loops
     syncReadReceipts().then(() => {
         fetchData();
@@ -205,7 +214,7 @@ function linkRenderer(link) {
     const sprite = new SpriteText(style ? style.label : link.type);
     sprite.color = style ? style.color : 'lightgrey';
     sprite.textHeight = 3;
-    sprite.backgroundColor = 'rgba(0,0,0,0.5)';
+    sprite.backgroundColor = 'rgba(0,0,0,0)';
     sprite.padding = 2;
     return sprite;
 }
@@ -616,6 +625,8 @@ function updateSignature() {
             if (data.success) {
                 showToast("Signature updated!");
                 document.getElementById('signature-input').value = '';
+                const counter = document.getElementById('signature-counter');
+                if (counter) counter.innerText = '0 / 160';
                 fetchData();
             } else {
                 showToast("Error: " + data.error, "error");

@@ -35,6 +35,7 @@ if(!isset($_SESSION["user_id"])) {
     <div id="search-hud" class="hud-panel">
         <input type="text" id="search-input" class="search-box" placeholder="Search for a user...">
         <div id="search-results"></div>
+        <div id="node-count-display" style="text-align: right; margin-top: 5px; font-size: 0.8em; color: #94a3b8;">Loading...</div>
     </div>
 
     <div id="profile-hud" class="hud-panel">
@@ -43,7 +44,6 @@ if(!isset($_SESSION["user_id"])) {
             <div>
                 <div class="username-label"><?= htmlspecialchars($_SESSION["username"]) ?></div>
                 <div class="user-id-label" id="my-user-id" style="font-size: 0.8em; color: #94a3b8;">ID: <?= $_SESSION["user_id"] ?></div>
-                <div class="status-label">Status: Online</div>
             </div>
         </div>
         <div id="my-signature" class="signature-display" style="margin-bottom: 10px; font-style: italic; color: #cbd5e1; font-size: 0.9em;"></div>
@@ -53,8 +53,8 @@ if(!isset($_SESSION["user_id"])) {
             <button id="signature-update-btn">Update Signature</button>
         </div>
         <div class="logout-container">
-            <a href="logout.php" class="logout-link">Log Out</a>
-            <span id="node-count-display">Loading...</span>
+            <button id="zoom-btn" class="action-btn" style="background: #3b82f6;">Zoom to Me</button>
+            <a href="logout.php" class="logout-link btn-secondary" style="text-decoration: none; text-align: center;">Log Out</a>
         </div>
     </div>
 
