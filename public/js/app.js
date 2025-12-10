@@ -21,8 +21,8 @@ const RELATION_TYPES = window.APP_CONFIG && window.APP_CONFIG.RELATION_TYPES ? w
 
 // Shared star/particle shader controls
 // Faster + deeper twinkles so the effect is visible on both the background and beam particles
-const STAR_TWINKLE_SPEED = 2.2; // ~2.8s full cycle for a clear pulse
-const STAR_TWINKLE_AMPLITUDE = 0.36; // Allow noticeable brightening without blowing out
+const STAR_TWINKLE_SPEED = 2.8; // ~2.2s full cycle for a clear pulse
+const STAR_TWINKLE_AMPLITUDE = 0.48; // Stronger brightening while keeping highlights controlled
 const CLOCK_START = performance.now() * 0.001; // Keep shader time values small to preserve precision
 
 function buildStarVertexShader() {
