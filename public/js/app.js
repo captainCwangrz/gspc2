@@ -54,18 +54,27 @@ function initApp(userId) {
             if (State.highlightNodes.size > 0 && !State.highlightLinks.has(link)) return 'rgba(255,255,255,0.05)';
             return CONFIG.relStyles[link.type]?.color || '#cbd5e1';
         })
-        .linkDirectionalParticles(link => {
-            const style = CONFIG.relStyles[link.type];
-            return (style && style.particle) ? 3 : 0;
-        })
-        .linkDirectionalParticleWidth(2)
+        .linkDirectionalParticles(0)
         .linkThreeObjectExtend(true)
         .linkThreeObject(linkRenderer)
-        .linkPositionUpdate((sprite, { start, end }) => {
+        .linkPositionUpdate((group, { start, end }) => {
             const middlePos = Object.assign(...['x', 'y', 'z'].map(c => ({
                 [c]: start[c] + (end[c] - start[c]) / 2
             })));
-            Object.assign(sprite.position, middlePos);
+            Object.assign(group.position, middlePos);
+
+            if (group.children) {
+                const dust = group.children.find(c => c.isPoints);
+                if (dust) {
+                    const vStart = new THREE.Vector3(start.x, start.y, start.z);
+                    const vEnd = new THREE.Vector3(end.x, end.y, end.z);
+                    const dist = vStart.distanceTo(vEnd);
+                    const dir = vEnd.clone().sub(vStart).normalize();
+
+                    dust.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), dir);
+                    dust.scale.set(1, 1, dist);
+                }
+            }
         })
         .onNodeClick(handleNodeClick)
         .onLinkClick(handleLinkClick)
@@ -137,10 +146,14 @@ function animateLoop() {
     State.graphData.nodes.forEach(n => {
         if(n.haloSprite) {
              n.haloSprite.material.opacity = opacity;
-             // Base scale is 200 (approx 2.5-3x node size of 64ish * sprite scale 16)
-             // Node sprite scale is 16.
-             // Halo needs to be bigger.
              n.haloSprite.scale.set(60 * scaleMod, 60 * scaleMod, 1);
+        }
+    });
+
+    // Animate Dust
+    State.graphData.links.forEach(link => {
+        if(link.__dust) {
+            link.__dust.rotation.z += 0.005;
         }
     });
 
@@ -176,6 +189,54 @@ async function syncReadReceipts() {
     } catch (e) {
         console.error("Hydration failed:", e);
     }
+}
+
+// --- Space Dust Effect Helpers ---
+
+const dustTexture = (() => {
+    // Soft radial glow texture
+    const canvas = document.createElement('canvas');
+    canvas.width = 32;
+    canvas.height = 32;
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createRadialGradient(16,16,0,16,16,16);
+    grad.addColorStop(0, 'rgba(255,255,255,1)');
+    grad.addColorStop(0.4, 'rgba(255,255,255,0.3)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0,0,32,32);
+    return new THREE.CanvasTexture(canvas);
+})();
+
+function createSpaceDust(color) {
+    const particleCount = 40;
+    const geo = new THREE.BufferGeometry();
+    const pos = [];
+
+    // Cylindrical cloud along Z-axis (-0.5 to 0.5)
+    for(let i=0; i<particleCount; i++) {
+        const r = 3 * Math.sqrt(Math.random()); // Radius spread
+        const theta = Math.random() * Math.PI * 2;
+        const x = r * Math.cos(theta);
+        const y = r * Math.sin(theta);
+        const z = (Math.random() - 0.5); // Spread along length
+
+        pos.push(x, y, z);
+    }
+
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+
+    const mat = new THREE.PointsMaterial({
+        color: color,
+        size: 3,
+        map: dustTexture,
+        transparent: true,
+        opacity: 0.8,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+    });
+
+    return new THREE.Points(geo, mat);
 }
 
 /**
@@ -304,16 +365,28 @@ function nodeRenderer(node) {
 }
 
 /**
- * Custom Link Label Renderer
+ * Custom Link Renderer (Dust + Label)
  */
 function linkRenderer(link) {
+    const group = new THREE.Group();
     const style = CONFIG.relStyles[link.type];
+
+    // 1. Dust Effect
+    if (style && style.particle) {
+        const dust = createSpaceDust(style.color);
+        group.add(dust);
+        link.__dust = dust; // Store ref for animation
+    }
+
+    // 2. Label
     const sprite = new SpriteText(style ? style.label : link.type);
     sprite.color = style ? style.color : 'lightgrey';
     sprite.textHeight = 3;
     sprite.backgroundColor = 'rgba(0,0,0,0)';
     sprite.padding = 2;
-    return sprite;
+    group.add(sprite);
+
+    return group;
 }
 
 /**
