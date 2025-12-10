@@ -67,6 +67,16 @@ if(isset($_SESSION["user_id"])) {
                 <input type="hidden" name="action" value="register">
 
                 <div class="form-group">
+                    <label>Real Name</label>
+                    <input type="text" name="real_name" required placeholder="Enter your real name">
+                </div>
+
+                <div class="form-group">
+                    <label>Date of Birth</label>
+                    <input type="date" name="dob" required>
+                </div>
+
+                <div class="form-group">
                     <label>Username</label>
                     <input type="text" name="username" required placeholder="Choose a username">
                 </div>

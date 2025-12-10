@@ -16,13 +16,14 @@ $username = trim($_POST["username"] ?? "");
 $password = $_POST["password"] ?? "";
 
 if ($action === "login") {
-    $stmt = $pdo->prepare('SELECT id, username, password_hash, avatar FROM users WHERE username=?');
+    $stmt = $pdo->prepare('SELECT id, username, real_name, password_hash, avatar FROM users WHERE username=?');
     $stmt->execute([$username]);
     $user = $stmt->fetch();
 
     if ($user && password_verify($password, $user["password_hash"])) {
         $_SESSION["user_id"] = $user["id"];
         $_SESSION["username"] = $user["username"];
+        $_SESSION["real_name"] = $user["real_name"];
         $_SESSION["avatar"] = $user["avatar"]; // 存一下头像备用
         header("Location: ../dashboard.php");
         exit;
@@ -32,7 +33,13 @@ if ($action === "login") {
 }
 
 if ($action === "register") {
-    if (!$username || !$password) exit("Missing fields!");
+    $real_name = trim($_POST["real_name"] ?? "");
+    $dob = $_POST["dob"] ?? "";
+
+    if (!$username || !$password || !$real_name || !$dob) exit("Missing fields!");
+
+    // Validate DOB (Basic check)
+    if (!strtotime($dob)) exit("Invalid Date of Birth");
 
     $avatar = $_POST["avatar"] ?? FALLBACK_AVATAR;
     if (!in_array($avatar, AVATARS)) $avatar = FALLBACK_AVATAR;
@@ -42,8 +49,8 @@ if ($action === "register") {
     // Removed random coordinate generation, using 0,0 as placeholders
     // The frontend engine will handle positioning
     try {
-        $stmt = $pdo->prepare('INSERT INTO users (username, password_hash, x_pos, y_pos, avatar) VALUES (?, ?, 0, 0, ?)');
-        $stmt->execute([$username, $password_hash, $avatar]);
+        $stmt = $pdo->prepare('INSERT INTO users (username, real_name, dob, password_hash, x_pos, y_pos, avatar) VALUES (?, ?, ?, ?, 0, 0, ?)');
+        $stmt->execute([$username, $real_name, $dob, $password_hash, $avatar]);
     } catch (PDOException $e) {
         if ($e->getCode() === "23000" && strpos($e->getMessage(), "username") !== false) {
             header("Location: ../index.php?error=username_exists");

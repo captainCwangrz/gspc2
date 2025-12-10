@@ -36,6 +36,18 @@ class Database {
 
     public static function ensureSchema($pdo) {
         try {
+            // Check if real_name exists in users
+            $stmt = $pdo->query("SHOW COLUMNS FROM users LIKE 'real_name'");
+            if (!$stmt->fetch()) {
+                $pdo->exec("ALTER TABLE users ADD COLUMN real_name VARCHAR(100) NOT NULL DEFAULT '' AFTER username");
+            }
+
+            // Check if dob exists in users
+            $stmt = $pdo->query("SHOW COLUMNS FROM users LIKE 'dob'");
+            if (!$stmt->fetch()) {
+                $pdo->exec("ALTER TABLE users ADD COLUMN dob DATE DEFAULT NULL AFTER real_name");
+            }
+
             // Check if updated_at exists in users
             $stmt = $pdo->query("SHOW COLUMNS FROM users LIKE 'updated_at'");
             if (!$stmt->fetch()) {
@@ -49,18 +61,11 @@ class Database {
             }
 
             // Check if unique index exists in relationships
-            // Note: 'SHOW INDEX' returns multiple rows for one index, we just check if the key_name exists
             $stmt = $pdo->query("SHOW INDEX FROM relationships WHERE Key_name = 'idx_rel_from_to'");
             if (!$stmt->fetch()) {
-                // Ignore errors if data already violates unique constraint?
-                // For safety, we use IGNORE or try catch. But ALTER IGNORE is deprecated.
-                // We will wrap in try-catch
                 try {
                     $pdo->exec("ALTER TABLE relationships ADD UNIQUE INDEX idx_rel_from_to (from_id, to_id)");
                 } catch (Exception $e) {
-                    // Index creation might fail if duplicates exist.
-                    // In a real scenario, we would need to clean up duplicates first.
-                    // For now we log/ignore or assume user handles it manually if it fails.
                     error_log("Migration Warning: Could not create unique index: " . $e->getMessage());
                 }
             }
@@ -83,8 +88,6 @@ class Database {
             ) ENGINE=InnoDB");
 
         } catch (Exception $e) {
-            // Suppress migration errors to avoid breaking the app if something weird happens,
-            // but log them.
             error_log("Schema Check Error: " . $e->getMessage());
         }
     }
@@ -102,6 +105,8 @@ class Database {
                 CREATE TABLE IF NOT EXISTS users (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     username VARCHAR(50) UNIQUE NOT NULL,
+                    real_name VARCHAR(100) NOT NULL,
+                    dob DATE NOT NULL,
                     password_hash VARCHAR(255) NOT NULL,
                     x_pos DOUBLE NOT NULL, y_pos DOUBLE NOT NULL,
                     avatar VARCHAR(50) NOT NULL,

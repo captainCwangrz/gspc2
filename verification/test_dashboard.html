@@ -1,21 +1,11 @@
-<?php
-// dashboard.php
-require_once 'config/db.php';
-require_once 'config/csrf.php';
-
-if(!isset($_SESSION["user_id"])) {
-    header("Location: index.php");
-    exit;
-}
-?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="<?= generateCsrfToken() ?>">
-    <title>Gossip Chain 3D</title>
-    <link rel="stylesheet" href="public/css/style.css">
+    <meta name="csrf-token" content="mock-token">
+    <title>Gossip Chain 3D (Mock)</title>
+    <link rel="stylesheet" href="../public/css/style.css">
 
     <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
     <script src="https://unpkg.com/three-spritetext@1.8.1/dist/three-spritetext.min.js"></script>
@@ -23,8 +13,15 @@ if(!isset($_SESSION["user_id"])) {
     <script>
         // Inject configuration from backend
         window.APP_CONFIG = {
-            RELATION_TYPES: <?php echo json_encode(RELATION_TYPES); ?>,
-            RELATION_STYLES: <?php echo json_encode(RELATION_STYLES); ?>
+            RELATION_TYPES: ["DATING","BEST_FRIEND","BROTHER","SISTER","BEEFING","CRUSH"],
+            RELATION_STYLES: {
+                'DATING': { color: '#ec4899', particle: true, label: '❤️ Dating' },
+                'BEST_FRIEND': { color: '#3b82f6', particle: true, label: '💎 Bestie' },
+                'BROTHER': { color: '#10b981', particle: true, label: '👊 Bro' },
+                'SISTER': { color: '#10b981', particle: true, label: '🌸 Sis' },
+                'BEEFING': { color: '#ef4444', particle: true, label: '💀 Beefing' },
+                'CRUSH': { color: '#a855f7', particle: true, label: '✨ Crush' }
+            }
         };
     </script>
 </head>
@@ -40,11 +37,11 @@ if(!isset($_SESSION["user_id"])) {
 
     <div id="profile-hud" class="hud-panel">
         <div class="user-header">
-            <img src="assets/<?= htmlspecialchars($_SESSION["avatar"] ?? '0.png') ?>" class="avatar-circle" id="my-avatar">
+            <img src="../assets/1.png" class="avatar-circle" id="my-avatar">
             <div>
-                <div class="username-label"><?= htmlspecialchars($_SESSION["real_name"] ?? $_SESSION["username"]) ?></div>
-                <div style="font-size: 0.8em; color: #94a3b8;">@<?= htmlspecialchars($_SESSION["username"]) ?></div>
-                <div class="user-id-label" id="my-user-id" style="font-size: 0.8em; color: #94a3b8;">ID: <?= $_SESSION["user_id"] ?></div>
+                <div class="username-label">Jules Winnfield</div>
+                <div style="font-size: 0.8em; color: #94a3b8;">@jules_test</div>
+                <div class="user-id-label" id="my-user-id" style="font-size: 0.8em; color: #94a3b8;">ID: 1</div>
             </div>
         </div>
         <div id="my-signature" class="signature-display" style="margin-bottom: 10px; font-style: italic; color: #cbd5e1; font-size: 0.9em;"></div>
@@ -55,7 +52,7 @@ if(!isset($_SESSION["user_id"])) {
         </div>
         <div class="logout-container">
             <button id="zoom-btn" class="action-btn" style="background: #3b82f6;">Zoom to Me</button>
-            <a href="logout.php" class="logout-link btn-secondary" style="text-decoration: none; text-align: center;">Log Out</a>
+            <a href="#" class="logout-link btn-secondary" style="text-decoration: none; text-align: center;">Log Out</a>
         </div>
     </div>
 
@@ -77,11 +74,11 @@ if(!isset($_SESSION["user_id"])) {
 
     <div id="chat-hud"></div>
 
-    <script src="public/js/app.js"></script>
+    <script src="../public/js/app.js"></script>
     <script>
-        // Bootstrap the app with PHP session data
+        // Bootstrap the app with Mock ID
         document.addEventListener('DOMContentLoaded', () => {
-            initApp(<?= $_SESSION["user_id"] ?>);
+            initApp(1);
         });
     </script>
 </body>

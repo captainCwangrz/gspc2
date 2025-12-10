@@ -66,7 +66,7 @@ try {
     // --- Full Data Fetch (Only if Changed) ---
 
     // 1. Get all nodes
-    $nodes = $pdo->query('SELECT id, username, avatar, signature FROM users')->fetchAll();
+    $nodes = $pdo->query('SELECT id, username, real_name, avatar, signature FROM users')->fetchAll();
 
     // 2. Get all relationships
     $edges = $pdo->query('SELECT from_id, to_id, type FROM relationships')->fetchAll();
@@ -102,7 +102,8 @@ try {
         $uid = (int)$u['id'];
         return [
             'id' => $uid,
-            'name' => $u['username'],
+            'name' => $u['real_name'], // Primary display name
+            'username' => $u['username'], // Unique handle
             'avatar' => "assets/" . $u['avatar'],
             'signature' => $u['signature'] ?? 'No gossip yet.',
             'val' => 1,
