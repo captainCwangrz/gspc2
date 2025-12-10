@@ -128,7 +128,7 @@ function initApp(userId) {
     });
 
     // Start Visual Loops
-    initMilkyWayBackground();
+    initStarfieldBackground();
     animateLoop();
 }
 
@@ -157,12 +157,17 @@ function animateLoop() {
         }
     });
 
-    // Animate Background (Rotate the galaxy slowly)
+    // Animate Background (Rotate the starfield slowly and twinkle)
     if (Graph) {
          const scene = Graph.scene();
-         const bg = scene.getObjectByName('milky-way-bg');
+         const bg = scene.getObjectByName('starfield-bg');
          if (bg) {
-             bg.rotation.y += 0.0001; // Very slow rotation
+             bg.rotation.y += 0.00005; // Very subtle rotation
+             // Update shader time for twinkling
+             const stars = bg.children[0];
+             if(stars && stars.material.uniforms) {
+                 stars.material.uniforms.uTime.value = Date.now() * 0.001;
+             }
          }
     }
 
@@ -846,106 +851,116 @@ function showToast(message, type = 'success', duration = 3000, onClick = null, d
 }
 
 /**
- * Strategy A: Procedural Milky Way
+ * Strategy A: High Quality Starfield (Rolls Royce Style)
  */
-function initMilkyWayBackground() {
+function initStarfieldBackground() {
     setTimeout(() => {
         if(!Graph) return;
+
+        // Fix camera far clipping to see distant stars
+        const camera = Graph.camera();
+        if(camera) {
+            camera.far = 20000;
+            camera.updateProjectionMatrix();
+        }
+
         const scene = Graph.scene();
 
+        // Remove old if exists
+        const old = scene.getObjectByName('starfield-bg');
+        if(old) scene.remove(old);
+
         const group = new THREE.Group();
-        group.name = 'milky-way-bg';
+        group.name = 'starfield-bg';
 
-        // Helper for soft circular particles
-        const getParticleTexture = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = 32;
-            canvas.height = 32;
-            const ctx = canvas.getContext('2d');
-            const grad = ctx.createRadialGradient(16,16,0,16,16,16);
-            grad.addColorStop(0, 'rgba(255,255,255,1)');
-            grad.addColorStop(1, 'rgba(255,255,255,0)');
-            ctx.fillStyle = grad;
-            ctx.fillRect(0,0,32,32);
-            const tex = new THREE.CanvasTexture(canvas);
-            return tex;
-        };
-        const particleTex = getParticleTexture();
+        const starCount = 10000;
+        const geo = new THREE.BufferGeometry();
 
-        // 1. Distant Background Stars (Sphere)
-        const starsGeo = new THREE.BufferGeometry();
-        const starCount = 5000;
-        const posArray = new Float32Array(starCount * 3);
-        for(let i=0; i<starCount*3; i++) {
-            posArray[i] = (Math.random() - 0.5) * 10000;
+        const pos = [];
+        const colors = [];
+        const sizes = [];
+        const phases = [];
+
+        const colorPalette = [
+            new THREE.Color('#9bb0ff'), // Blue-ish
+            new THREE.Color('#aabfff'), // Blue-white
+            new THREE.Color('#cad7ff'), // White-blue
+            new THREE.Color('#f8f7ff'), // White
+            new THREE.Color('#fff4ea'), // Yellow-white
+            new THREE.Color('#ffd2a1'), // Yellow-orange
+            new THREE.Color('#ffcc6f')  // Orange-red
+        ];
+
+        for(let i=0; i<starCount; i++) {
+            // Random position in a large sphere (infinite feel)
+            // Use spherical coordinates for better distribution
+            const r = 3000 + Math.random() * 6000; // Distance 3000 to 9000
+            const theta = 2 * Math.PI * Math.random();
+            const phi = Math.acos(2 * Math.random() - 1);
+
+            const x = r * Math.sin(phi) * Math.cos(theta);
+            const y = r * Math.sin(phi) * Math.sin(theta);
+            const z = r * Math.cos(phi);
+
+            pos.push(x, y, z);
+
+            // Color
+            const c = colorPalette[Math.floor(Math.random() * colorPalette.length)];
+            colors.push(c.r, c.g, c.b);
+
+            // Size (varied) - Increased significantly to counteract distance attenuation
+            sizes.push(Math.random() * 20.0 + 10.0);
+
+            // Twinkle phase
+            phases.push(Math.random() * Math.PI * 2);
         }
-        starsGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-        const starsMat = new THREE.PointsMaterial({
-            size: 4,
-            color: 0xaaaaaa,
-            transparent: true,
-            opacity: 0.8,
-            map: particleTex,
-            depthWrite: false
-        });
-        const starField = new THREE.Points(starsGeo, starsMat);
-        group.add(starField);
 
-        // 2. The Galactic Band (Disk/Cylinder)
-        const galaxyGeo = new THREE.BufferGeometry();
-        const galaxyCount = 3000;
-        const gPos = new Float32Array(galaxyCount * 3);
-        const gColors = new Float32Array(galaxyCount * 3);
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+        geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        geo.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
+        geo.setAttribute('phase', new THREE.Float32BufferAttribute(phases, 1));
 
-        const c1 = new THREE.Color(0xfdf4dc); // Cream/Yellow center
-        const c2 = new THREE.Color(0x60a5fa); // Blue outer
-        const c3 = new THREE.Color(0xd8b4fe); // Purple dust
-
-        for(let i=0; i<galaxyCount; i++) {
-            const i3 = i*3;
-            // Radius: concentrated near center, spreading out
-            const r = Math.random() * 4000 + 500;
-            // Angle: full circle
-            const theta = Math.random() * Math.PI * 2;
-            // Height: flatten it out
-            const y = (Math.random() - 0.5) * 400;
-
-            gPos[i3] = r * Math.cos(theta);
-            gPos[i3+1] = y;
-            gPos[i3+2] = r * Math.sin(theta);
-
-            // Color based on radius (Center = warm, Outer = cool/dusty)
-            const mix = Math.min(1, r / 4000);
-            let c;
-            if(Math.random() > 0.5) {
-                c = c1.clone().lerp(c2, mix);
-            } else {
-                c = c1.clone().lerp(c3, mix);
+        const vertShader = `
+            uniform float uTime;
+            attribute float size;
+            attribute float phase;
+            varying vec3 vColor;
+            varying float vOpacity;
+            void main() {
+                vColor = color;
+                vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                gl_Position = projectionMatrix * mvPosition;
+                gl_PointSize = size * (1000.0 / -mvPosition.z);
+                float t = sin(uTime * 1.5 + phase);
+                vOpacity = 0.5 + 0.5 * t;
             }
-            gColors[i3] = c.r;
-            gColors[i3+1] = c.g;
-            gColors[i3+2] = c.b;
-        }
+        `;
 
-        galaxyGeo.setAttribute('position', new THREE.BufferAttribute(gPos, 3));
-        galaxyGeo.setAttribute('color', new THREE.BufferAttribute(gColors, 3));
+        const fragShader = `
+            varying vec3 vColor;
+            varying float vOpacity;
+            void main() {
+                vec2 xy = gl_PointCoord.xy - vec2(0.5);
+                float ll = length(xy);
+                if (ll > 0.5) discard;
+                float alpha = (1.0 - smoothstep(0.4, 0.5, ll)) * vOpacity;
+                gl_FragColor = vec4(vColor, alpha);
+            }
+        `;
 
-        const galaxyMat = new THREE.PointsMaterial({
-            size: 40,
-            vertexColors: true,
+        const mat = new THREE.ShaderMaterial({
+            uniforms: {
+                uTime: { value: 0 }
+            },
+            vertexShader: vertShader,
+            fragmentShader: fragShader,
             transparent: true,
-            opacity: 0.2, // Faint fog look
-            blending: THREE.AdditiveBlending,
             depthWrite: false,
-            map: particleTex
+            blending: THREE.AdditiveBlending
         });
-        const galaxy = new THREE.Points(galaxyGeo, galaxyMat);
 
-        // Tilt the galaxy for better view
-        galaxy.rotation.z = Math.PI / 6; // 30 deg tilt
-        galaxy.rotation.x = Math.PI / 8;
-
-        group.add(galaxy);
+        const stars = new THREE.Points(geo, mat);
+        group.add(stars);
 
         scene.add(group);
     }, 1000);
