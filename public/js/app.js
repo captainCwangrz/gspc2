@@ -49,11 +49,8 @@ function initApp(userId) {
         .showNavInfo(false)
         .nodeLabel('name')
         .nodeThreeObject(nodeRenderer)
-        .linkWidth(link => link === State.highlightLink ? 2 : 1)
-        .linkColor(link => {
-            if (State.highlightNodes.size > 0 && !State.highlightLinks.has(link)) return 'rgba(255,255,255,0.05)';
-            return CONFIG.relStyles[link.type]?.color || '#cbd5e1';
-        })
+        .linkWidth(link => link === State.highlightLink ? 2 : 1) // Keep interactable width
+        .linkColor(() => 'rgba(0,0,0,0)') // Transparent to hide solid line (beam only)
         .linkDirectionalParticles(0)
         .linkThreeObjectExtend(true)
         .linkThreeObject(linkRenderer)
@@ -881,20 +878,19 @@ function initStarfieldBackground() {
         const sizes = [];
         const phases = [];
 
+        // Refined Palette (Subtle variety, high saturation)
         const colorPalette = [
-            new THREE.Color('#9bb0ff'), // Blue-ish
-            new THREE.Color('#aabfff'), // Blue-white
-            new THREE.Color('#cad7ff'), // White-blue
-            new THREE.Color('#f8f7ff'), // White
-            new THREE.Color('#fff4ea'), // Yellow-white
-            new THREE.Color('#ffd2a1'), // Yellow-orange
-            new THREE.Color('#ffcc6f')  // Orange-red
+            new THREE.Color('#b3cfff'), // Crisp Blue
+            new THREE.Color('#d1dfff'), // Soft Blue-White
+            new THREE.Color('#ffffff'), // Pure White
+            new THREE.Color('#fff2e0'), // Warm White
+            new THREE.Color('#ffe0b5'), // Soft Gold
+            new THREE.Color('#ffcfcf')  // Faint Rose (Variety)
         ];
 
         for(let i=0; i<starCount; i++) {
-            // Random position in a large sphere (infinite feel)
-            // Use spherical coordinates for better distribution
-            const r = 3000 + Math.random() * 6000; // Distance 3000 to 9000
+            // Random position in a large sphere
+            const r = 3000 + Math.random() * 6000;
             const theta = 2 * Math.PI * Math.random();
             const phi = Math.acos(2 * Math.random() - 1);
 
@@ -906,10 +902,25 @@ function initStarfieldBackground() {
 
             // Color
             const c = colorPalette[Math.floor(Math.random() * colorPalette.length)];
-            colors.push(c.r, c.g, c.b);
+            // Add slight randomness to saturation/brightness
+            const hsl = {};
+            c.getHSL(hsl);
+            // subtle shift
+            hsl.s = Math.min(1.0, hsl.s * (0.9 + Math.random() * 0.2));
+            hsl.l = Math.min(1.0, hsl.l * (0.95 + Math.random() * 0.1));
+            const c2 = new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l);
+            colors.push(c2.r, c2.g, c2.b);
 
-            // Size (varied) - Increased significantly to counteract distance attenuation
-            sizes.push(Math.random() * 20.0 + 10.0);
+            // Size Distribution: Power law for more small stars, fewer big ones
+            // Base range: 10 to 22 roughly as requested, but we scale it by distance in shader.
+            // Let's generate a base "scale factor".
+            const rand = Math.random();
+            // Bias towards smaller numbers: x^3 maps 0..1 to 0..1 strongly biased to 0
+            const sizeBias = rand * rand * rand * rand; // Heavy bias to small
+            // Map 0..1 to range ~4.0 to ~22.0
+            const size = 4.0 + sizeBias * 18.0;
+
+            sizes.push(size);
 
             // Twinkle phase
             phases.push(Math.random() * Math.PI * 2);
@@ -931,9 +942,12 @@ function initStarfieldBackground() {
                 vColor = starColor;
                 vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
                 gl_Position = projectionMatrix * mvPosition;
+                // Standard size attenuation
                 gl_PointSize = size * (1000.0 / -mvPosition.z);
+
+                // Twinkle
                 float t = sin(uTime * 1.5 + phase);
-                vOpacity = 0.5 + 0.5 * t;
+                vOpacity = 0.6 + 0.4 * t;
             }
         `;
 
@@ -941,11 +955,27 @@ function initStarfieldBackground() {
             varying vec3 vColor;
             varying float vOpacity;
             void main() {
+                // Coordinates relative to center (0,0) ranges -0.5 to 0.5
                 vec2 xy = gl_PointCoord.xy - vec2(0.5);
-                float ll = length(xy);
-                if (ll > 0.5) discard;
-                float alpha = (1.0 - smoothstep(0.4, 0.5, ll)) * vOpacity;
-                gl_FragColor = vec4(vColor, alpha);
+                float dist = length(xy);
+
+                // Core + Halo calculation
+                // Core: sharp falloff near center
+                float core = smoothstep(0.1, 0.0, dist);
+
+                // Halo: soft extended glow
+                float halo = smoothstep(0.5, 0.0, dist) * 0.4;
+
+                // Combine
+                float alpha = (core + halo) * vOpacity;
+
+                // Discard faint pixels to avoid sorting issues if any
+                if (alpha < 0.01) discard;
+
+                // Subtle edge tint?
+                vec3 finalColor = vColor + vec3(0.1, 0.1, 0.2) * (halo * 2.0);
+
+                gl_FragColor = vec4(finalColor, alpha);
             }
         `;
 
