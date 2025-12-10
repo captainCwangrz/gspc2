@@ -64,15 +64,15 @@ function initApp(userId) {
             Object.assign(group.position, middlePos);
 
             if (group.children) {
-                const dust = group.children.find(c => c.isPoints);
-                if (dust) {
+                const dustContainer = group.children.find(c => c.name === 'dust-container');
+                if (dustContainer) {
                     const vStart = new THREE.Vector3(start.x, start.y, start.z);
                     const vEnd = new THREE.Vector3(end.x, end.y, end.z);
                     const dist = vStart.distanceTo(vEnd);
                     const dir = vEnd.clone().sub(vStart).normalize();
 
-                    dust.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), dir);
-                    dust.scale.set(1, 1, dist);
+                    dustContainer.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), dir);
+                    dustContainer.scale.set(1, 1, dist);
                 }
             }
         })
@@ -209,7 +209,7 @@ const dustTexture = (() => {
 })();
 
 function createSpaceDust(color) {
-    const particleCount = 40;
+    const particleCount = 150;
     const geo = new THREE.BufferGeometry();
     const pos = [];
 
@@ -228,7 +228,7 @@ function createSpaceDust(color) {
 
     const mat = new THREE.PointsMaterial({
         color: color,
-        size: 3,
+        size: 1.5,
         map: dustTexture,
         transparent: true,
         opacity: 0.8,
@@ -374,8 +374,14 @@ function linkRenderer(link) {
     // 1. Dust Effect
     if (style && style.particle) {
         const dust = createSpaceDust(style.color);
-        group.add(dust);
-        link.__dust = dust; // Store ref for animation
+
+        // Wrap dust in a container to separate alignment (container) from rotation (dust)
+        const dustContainer = new THREE.Group();
+        dustContainer.name = 'dust-container';
+        dustContainer.add(dust);
+        group.add(dustContainer);
+
+        link.__dust = dust; // Store ref for animation (spin)
     }
 
     // 2. Label
@@ -384,6 +390,8 @@ function linkRenderer(link) {
     sprite.textHeight = 3;
     sprite.backgroundColor = 'rgba(0,0,0,0)';
     sprite.padding = 2;
+    // Disable depth write so the transparent background doesn't block objects behind it
+    if(sprite.material) sprite.material.depthWrite = false;
     group.add(sprite);
 
     return group;
