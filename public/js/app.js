@@ -911,16 +911,16 @@ function initStarfieldBackground() {
             const c2 = new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l);
             colors.push(c2.r, c2.g, c2.b);
 
-            // Size Distribution: Power law for more small stars, fewer big ones
+            // Size Distribution: Slightly shift toward larger stars
             // Base range: 8 to 28 as requested
             const rand = Math.random();
-            // Bias towards smaller numbers: x^3 (less aggressive than x^4) to allow more mid-sized stars
-            const sizeBias = Math.pow(rand, 3);
+            // Bias favors midsize-to-large a bit more than before
+            const sizeBias = Math.pow(rand, 2.4);
             let size = 8.0 + sizeBias * 20.0; // Range 8.0 to ~28.0
 
             // "Foreground" / Hero Stars: A small percentage are forced to be large/pronounced
-            // 2% chance to be a large "hero" star (Size 24-28)
-            if (Math.random() < 0.02) {
+            // 3% chance to be a large "hero" star (Size 24-28)
+            if (Math.random() < 0.03) {
                 size = 24.0 + Math.random() * 4.0;
             }
 
@@ -949,9 +949,9 @@ function initStarfieldBackground() {
                 // Standard size attenuation
                 gl_PointSize = size * (1000.0 / -mvPosition.z);
 
-                // Twinkle (Slower and less intense)
-                float t = sin(uTime * 0.5 + phase);
-                vOpacity = 0.8 + 0.2 * t;
+                // Twinkle (slower cadence and reduced amplitude for calmer background)
+                float t = sin(uTime * 0.25 + phase);
+                vOpacity = 0.85 + 0.15 * t;
             }
         `;
 
