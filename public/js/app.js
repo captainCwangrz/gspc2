@@ -35,7 +35,7 @@ function buildStarVertexShader() {
             vColor = starColor;
             vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
             gl_Position = projectionMatrix * mvPosition;
-            gl_PointSize = size * (1000.0 / -mvPosition.z);
+            gl_PointSize = max(1.35, size * (1000.0 / -mvPosition.z));
             float t = sin(uTime * ${STAR_TWINKLE_SPEED} + phase);
             float eased = t * t * (3.0 - 2.0 * t); // Smoothstep-like easing to avoid hard swings
             float sizeFactor = clamp((size - 10.0) / 20.0, 0.0, 1.0); // Dampen twinkle on tiny stars
