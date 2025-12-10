@@ -87,6 +87,23 @@ class Database {
                 FOREIGN KEY (peer_id) REFERENCES users(id) ON DELETE CASCADE
             ) ENGINE=InnoDB");
 
+            // Drop x_pos, y_pos and key coord if they exist
+            $stmt = $pdo->query("SHOW COLUMNS FROM users LIKE 'x_pos'");
+            if ($stmt->fetch()) {
+                try {
+                    // Try to drop the index first if it exists
+                    $pdo->exec("ALTER TABLE users DROP INDEX coord");
+                } catch (Exception $e) {
+                     // Index might not exist or already dropped
+                }
+                $pdo->exec("ALTER TABLE users DROP COLUMN x_pos");
+            }
+            $stmt = $pdo->query("SHOW COLUMNS FROM users LIKE 'y_pos'");
+            if ($stmt->fetch()) {
+                 $pdo->exec("ALTER TABLE users DROP COLUMN y_pos");
+            }
+
+
         } catch (Exception $e) {
             error_log("Schema Check Error: " . $e->getMessage());
         }
@@ -108,11 +125,9 @@ class Database {
                     real_name VARCHAR(100) NOT NULL,
                     dob DATE NOT NULL,
                     password_hash VARCHAR(255) NOT NULL,
-                    x_pos DOUBLE NOT NULL, y_pos DOUBLE NOT NULL,
                     avatar VARCHAR(50) NOT NULL,
                     signature VARCHAR(160) DEFAULT NULL,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    UNIQUE KEY coord (x_pos, y_pos)
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
                 ) ENGINE=InnoDB;
 
                 CREATE TABLE IF NOT EXISTS relationships (

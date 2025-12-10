@@ -231,6 +231,8 @@ function nodeRenderer(node) {
     const material = new THREE.SpriteMaterial({ map: texture });
     const sprite = new THREE.Sprite(material);
     sprite.scale.set(16, 16, 1);
+    // Ensure avatar renders on top of halo if they fight
+    sprite.renderOrder = 10;
 
     const img = new Image();
     img.crossOrigin = "Anonymous";
@@ -248,10 +250,11 @@ function nodeRenderer(node) {
         if(node.haloMaterial) node.haloMaterial.dispose();
     };
 
+    // Use a group for everything
+    const group = new THREE.Group();
+
     // Strategy C: The Halo (Billboarded Glow Sprite)
     if (node.id === State.userId) {
-        const group = new THREE.Group();
-
         // 1. The Halo (Behind)
         const haloCanvas = document.createElement('canvas');
         haloCanvas.width = 64;
@@ -278,26 +281,26 @@ function nodeRenderer(node) {
 
         // Set initial scale (will be animated)
         haloSprite.scale.set(50, 50, 1);
-
-        // Add halo first so it renders behind?
-        // With sprites, render order depends on Z-depth usually,
-        // but we can force render order or just rely on transparency.
-        // Putting it in group.
-        group.add(haloSprite);
-        group.add(sprite); // Avatar on top (conceptually)
-
-        // Ensure avatar renders on top of halo if they fight
-        sprite.renderOrder = 10;
         haloSprite.renderOrder = 1;
+
+        group.add(haloSprite);
 
         node.haloSprite = haloSprite;
         node.haloTexture = haloTex;
         node.haloMaterial = haloMat;
-
-        return group;
     }
 
-    return sprite;
+    // Add avatar sprite
+    group.add(sprite);
+
+    // Add Name Text Sprite
+    const nameSprite = new SpriteText(node.name);
+    nameSprite.color = 'white';
+    nameSprite.textHeight = 4;
+    nameSprite.position.y = -12; // Position below the node
+    group.add(nameSprite);
+
+    return group;
 }
 
 /**
@@ -678,7 +681,9 @@ function handleSearch(e) {
     }
 
     const hits = State.graphData.nodes.filter(n =>
-        n.name.toLowerCase().includes(searchTerm) || String(n.id) === searchTerm
+        n.name.toLowerCase().includes(searchTerm) ||
+        String(n.id) === searchTerm ||
+        (n.username && n.username.toLowerCase().includes(searchTerm))
     );
 
     if (hits.length === 0) {
