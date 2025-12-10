@@ -55,10 +55,10 @@ const STAR_FRAGMENT_SHADER = `
         float dist = length(xy);
         float core = smoothstep(0.1, 0.0, dist);
         float halo = smoothstep(0.5, 0.0, dist) * 0.4;
-        float alpha = (core + halo) * vOpacity;
+        float alpha = (core + halo);
         if (alpha < 0.01) discard;
-        vec3 finalColor = vColor + vec3(0.1, 0.1, 0.2) * (halo * 2.0);
-        gl_FragColor = vec4(finalColor, alpha);
+        vec3 finalColor = (vColor + vec3(0.1, 0.1, 0.2) * (halo * 2.0)) * vOpacity;
+        gl_FragColor = vec4(finalColor, alpha * vOpacity);
     }
 `;
 
