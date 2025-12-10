@@ -916,18 +916,19 @@ function initStarfieldBackground() {
         }
 
         geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-        geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        geo.setAttribute('starColor', new THREE.Float32BufferAttribute(colors, 3));
         geo.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
         geo.setAttribute('phase', new THREE.Float32BufferAttribute(phases, 1));
 
         const vertShader = `
             uniform float uTime;
+            attribute vec3 starColor;
             attribute float size;
             attribute float phase;
             varying vec3 vColor;
             varying float vOpacity;
             void main() {
-                vColor = color;
+                vColor = starColor;
                 vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
                 gl_Position = projectionMatrix * mvPosition;
                 gl_PointSize = size * (1000.0 / -mvPosition.z);
