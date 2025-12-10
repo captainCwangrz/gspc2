@@ -23,6 +23,7 @@ const RELATION_TYPES = window.APP_CONFIG && window.APP_CONFIG.RELATION_TYPES ? w
 // Faster + deeper twinkles so the effect is visible on both the background and beam particles
 const STAR_TWINKLE_SPEED = 0.45; // ~14s full cycle
 const STAR_TWINKLE_AMPLITUDE = 0.28; // Allow noticeable brightening without blowing out
+const CLOCK_START = performance.now() * 0.001; // Keep shader time values small to preserve precision
 
 function buildStarVertexShader() {
     return `
@@ -178,6 +179,7 @@ function initApp(userId) {
 function animateLoop() {
     // Animate Halo
     const time = Date.now() * 0.0015; // Speed
+    const elapsed = (performance.now() * 0.001) - CLOCK_START; // Stable time base for shader uniforms
     // Breathing: Opacity between 0.3 and 0.6
     const opacity = 0.45 + Math.sin(time) * 0.15;
     // Slight scale breathing: 1.0 to 1.1 relative to base scale
@@ -195,7 +197,7 @@ function animateLoop() {
         if(link.__dust) {
             link.__dust.rotation.z += 0.005;
             if (link.__dustMat && link.__dustMat.uniforms && link.__dustMat.uniforms.uTime) {
-                link.__dustMat.uniforms.uTime.value = Date.now() * 0.001;
+                link.__dustMat.uniforms.uTime.value = elapsed;
             }
         }
     });
@@ -210,7 +212,7 @@ function animateLoop() {
              // twinkle amplitudes were reduced.
              const stars = bg.children[0];
              if(stars && stars.material.uniforms) {
-                 stars.material.uniforms.uTime.value = Date.now() * 0.001;
+                 stars.material.uniforms.uTime.value = elapsed;
              }
          }
     }
