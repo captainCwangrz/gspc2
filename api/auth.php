@@ -49,7 +49,7 @@ if ($action === "register") {
     // Removed random coordinate generation, using 0,0 as placeholders
     // The frontend engine will handle positioning
     try {
-        $stmt = $pdo->prepare('INSERT INTO users (username, real_name, dob, password_hash, x_pos, y_pos, avatar) VALUES (?, ?, ?, ?, 0, 0, ?)');
+        $stmt = $pdo->prepare('INSERT INTO users (username, real_name, dob, password_hash, avatar) VALUES (?, ?, ?, ?, ?)');
         $stmt->execute([$username, $real_name, $dob, $password_hash, $avatar]);
     } catch (PDOException $e) {
         if ($e->getCode() === "23000" && strpos($e->getMessage(), "username") !== false) {
