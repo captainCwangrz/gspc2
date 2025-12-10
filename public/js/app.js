@@ -20,8 +20,8 @@ const CONFIG = {
 const RELATION_TYPES = window.APP_CONFIG && window.APP_CONFIG.RELATION_TYPES ? window.APP_CONFIG.RELATION_TYPES : ['DATING', 'BEST_FRIEND', 'BROTHER', 'SISTER', 'BEEFING', 'CRUSH'];
 
 // Shared star/particle shader controls
-const STAR_TWINKLE_SPEED = 0.03; // Even slower cycle for subtle twinkling
-const STAR_TWINKLE_AMPLITUDE = 0.006; // Keep stars nearly steady
+const STAR_TWINKLE_SPEED = 0.012; // Ultra-slow cycle for very gentle twinkling
+const STAR_TWINKLE_AMPLITUDE = 0.0015; // Extremely subtle brightness shift
 
 function buildStarVertexShader() {
     return `
@@ -39,8 +39,9 @@ function buildStarVertexShader() {
             float t = sin(uTime * ${STAR_TWINKLE_SPEED} + phase);
             float eased = t * t * (3.0 - 2.0 * t); // Smoothstep-like easing to avoid hard swings
             float sizeFactor = clamp((size - 10.0) / 20.0, 0.0, 1.0); // Dampen twinkle on tiny stars
-            float scaledAmplitude = ${STAR_TWINKLE_AMPLITUDE} * (0.25 + 0.75 * sizeFactor);
-            vOpacity = 0.97 + scaledAmplitude * (eased - 0.5);
+            float sizeEase = pow(sizeFactor, 1.5); // Make small stars nearly steady
+            float scaledAmplitude = ${STAR_TWINKLE_AMPLITUDE} * (0.08 + 0.92 * sizeEase);
+            vOpacity = 0.985 + scaledAmplitude * (eased - 0.5);
         }
     `;
 }
