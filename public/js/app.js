@@ -19,6 +19,44 @@ const CONFIG = {
 
 const RELATION_TYPES = window.APP_CONFIG && window.APP_CONFIG.RELATION_TYPES ? window.APP_CONFIG.RELATION_TYPES : ['DATING', 'BEST_FRIEND', 'BROTHER', 'SISTER', 'BEEFING', 'CRUSH'];
 
+// Shared star/particle shader controls
+const STAR_TWINKLE_SPEED = 0.25;
+const STAR_TWINKLE_AMPLITUDE = 0.07; // Softer twinkle (about half the previous effect)
+
+function buildStarVertexShader() {
+    return `
+        uniform float uTime;
+        attribute vec3 starColor;
+        attribute float size;
+        attribute float phase;
+        varying vec3 vColor;
+        varying float vOpacity;
+        void main() {
+            vColor = starColor;
+            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+            gl_Position = projectionMatrix * mvPosition;
+            gl_PointSize = size * (1000.0 / -mvPosition.z);
+            float t = sin(uTime * ${STAR_TWINKLE_SPEED} + phase);
+            vOpacity = 0.9 + ${STAR_TWINKLE_AMPLITUDE} * t;
+        }
+    `;
+}
+
+const STAR_FRAGMENT_SHADER = `
+    varying vec3 vColor;
+    varying float vOpacity;
+    void main() {
+        vec2 xy = gl_PointCoord.xy - vec2(0.5);
+        float dist = length(xy);
+        float core = smoothstep(0.1, 0.0, dist);
+        float halo = smoothstep(0.5, 0.0, dist) * 0.4;
+        float alpha = (core + halo) * vOpacity;
+        if (alpha < 0.01) discard;
+        vec3 finalColor = vColor + vec3(0.1, 0.1, 0.2) * (halo * 2.0);
+        gl_FragColor = vec4(finalColor, alpha);
+    }
+`;
+
 // --- Global State ---
 const State = {
     userId: null,
@@ -151,6 +189,9 @@ function animateLoop() {
     State.graphData.links.forEach(link => {
         if(link.__dust) {
             link.__dust.rotation.z += 0.005;
+            if (link.__dustMat && link.__dustMat.uniforms && link.__dustMat.uniforms.uTime) {
+                link.__dustMat.uniforms.uTime.value = Date.now() * 0.001;
+            }
         }
     });
 
@@ -195,25 +236,16 @@ async function syncReadReceipts() {
 
 // --- Space Dust Effect Helpers ---
 
-const dustTexture = (() => {
-    // Soft radial glow texture
-    const canvas = document.createElement('canvas');
-    canvas.width = 32;
-    canvas.height = 32;
-    const ctx = canvas.getContext('2d');
-    const grad = ctx.createRadialGradient(16,16,0,16,16,16);
-    grad.addColorStop(0, 'rgba(255,255,255,1)');
-    grad.addColorStop(0.4, 'rgba(255,255,255,0.3)');
-    grad.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0,0,32,32);
-    return new THREE.CanvasTexture(canvas);
-})();
-
 function createSpaceDust(color) {
-    const particleCount = 150;
+    const particleCount = 180;
     const geo = new THREE.BufferGeometry();
     const pos = [];
+    const colors = [];
+    const sizes = [];
+    const phases = [];
+
+    // Base color with slight variation per particle
+    const base = new THREE.Color(color);
 
     // Cylindrical cloud along Z-axis (-0.5 to 0.5)
     for(let i=0; i<particleCount; i++) {
@@ -224,21 +256,42 @@ function createSpaceDust(color) {
         const z = (Math.random() - 0.5); // Spread along length
 
         pos.push(x, y, z);
+
+        const c = base.clone();
+        const hsl = {};
+        c.getHSL(hsl);
+        hsl.s = Math.min(1.0, hsl.s * (0.9 + Math.random() * 0.2));
+        hsl.l = Math.min(1.0, hsl.l * (0.9 + Math.random() * 0.15));
+        const varied = new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l);
+        colors.push(varied.r, varied.g, varied.b);
+
+        const rand = Math.random();
+        const sizeBias = Math.pow(rand, 1.8);
+        sizes.push(1.0 + sizeBias * 3.0); // Slightly varied sizes
+
+        phases.push(Math.random() * Math.PI * 2);
     }
 
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('starColor', new THREE.Float32BufferAttribute(colors, 3));
+    geo.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
+    geo.setAttribute('phase', new THREE.Float32BufferAttribute(phases, 1));
 
-    const mat = new THREE.PointsMaterial({
-        color: color,
-        size: 1.5,
-        map: dustTexture,
+    const mat = new THREE.ShaderMaterial({
+        uniforms: {
+            uTime: { value: 0 }
+        },
+        vertexShader: buildStarVertexShader(),
+        fragmentShader: STAR_FRAGMENT_SHADER,
         transparent: true,
-        opacity: 0.8,
         depthWrite: false,
-        blending: THREE.AdditiveBlending,
+        blending: THREE.AdditiveBlending
     });
 
-    return new THREE.Points(geo, mat);
+    const points = new THREE.Points(geo, mat);
+    points.name = 'dust-points';
+
+    return points;
 }
 
 /**
@@ -384,6 +437,7 @@ function linkRenderer(link) {
         group.add(dustContainer);
 
         link.__dust = dust; // Store ref for animation (spin)
+        link.__dustMat = dust.material; // For time-based twinkle updates
     }
 
     // 2. Label
@@ -911,17 +965,16 @@ function initStarfieldBackground() {
             const c2 = new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l);
             colors.push(c2.r, c2.g, c2.b);
 
-            // Size Distribution: Slightly shift toward larger stars
-            // Base range: 8 to 28 as requested
+            // Size Distribution: Shift toward larger stars
+            // Base range: 10 to 30, biased toward the upper half
             const rand = Math.random();
-            // Bias favors midsize-to-large a bit more than before
-            const sizeBias = Math.pow(rand, 2.4);
-            let size = 8.0 + sizeBias * 20.0; // Range 8.0 to ~28.0
+            const sizeBias = Math.pow(rand, 1.6);
+            let size = 10.0 + sizeBias * 20.0; // Range 10.0 to ~30.0
 
-            // "Foreground" / Hero Stars: A small percentage are forced to be large/pronounced
-            // 3% chance to be a large "hero" star (Size 24-28)
-            if (Math.random() < 0.03) {
-                size = 24.0 + Math.random() * 4.0;
+            // "Foreground" / Hero Stars: Slightly higher chance to be large/pronounced
+            // 5% chance to be a large "hero" star (Size 26-32)
+            if (Math.random() < 0.05) {
+                size = 26.0 + Math.random() * 6.0;
             }
 
             sizes.push(size);
@@ -935,60 +988,12 @@ function initStarfieldBackground() {
         geo.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
         geo.setAttribute('phase', new THREE.Float32BufferAttribute(phases, 1));
 
-        const vertShader = `
-            uniform float uTime;
-            attribute vec3 starColor;
-            attribute float size;
-            attribute float phase;
-            varying vec3 vColor;
-            varying float vOpacity;
-            void main() {
-                vColor = starColor;
-                vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-                gl_Position = projectionMatrix * mvPosition;
-                // Standard size attenuation
-                gl_PointSize = size * (1000.0 / -mvPosition.z);
-
-                // Twinkle (slower cadence and reduced amplitude for calmer background)
-                float t = sin(uTime * 0.25 + phase);
-                vOpacity = 0.85 + 0.15 * t;
-            }
-        `;
-
-        const fragShader = `
-            varying vec3 vColor;
-            varying float vOpacity;
-            void main() {
-                // Coordinates relative to center (0,0) ranges -0.5 to 0.5
-                vec2 xy = gl_PointCoord.xy - vec2(0.5);
-                float dist = length(xy);
-
-                // Core + Halo calculation
-                // Core: sharp falloff near center
-                float core = smoothstep(0.1, 0.0, dist);
-
-                // Halo: soft extended glow
-                float halo = smoothstep(0.5, 0.0, dist) * 0.4;
-
-                // Combine
-                float alpha = (core + halo) * vOpacity;
-
-                // Discard faint pixels to avoid sorting issues if any
-                if (alpha < 0.01) discard;
-
-                // Subtle edge tint?
-                vec3 finalColor = vColor + vec3(0.1, 0.1, 0.2) * (halo * 2.0);
-
-                gl_FragColor = vec4(finalColor, alpha);
-            }
-        `;
-
         const mat = new THREE.ShaderMaterial({
             uniforms: {
                 uTime: { value: 0 }
             },
-            vertexShader: vertShader,
-            fragmentShader: fragShader,
+            vertexShader: buildStarVertexShader(),
+            fragmentShader: STAR_FRAGMENT_SHADER,
             transparent: true,
             depthWrite: false,
             blending: THREE.AdditiveBlending
