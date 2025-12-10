@@ -21,8 +21,8 @@ const RELATION_TYPES = window.APP_CONFIG && window.APP_CONFIG.RELATION_TYPES ? w
 
 // Shared star/particle shader controls
 // Faster + deeper twinkles so the effect is visible on both the background and beam particles
-const STAR_TWINKLE_SPEED = 0.45; // ~14s full cycle
-const STAR_TWINKLE_AMPLITUDE = 0.28; // Allow noticeable brightening without blowing out
+const STAR_TWINKLE_SPEED = 2.2; // ~2.8s full cycle for a clear pulse
+const STAR_TWINKLE_AMPLITUDE = 0.36; // Allow noticeable brightening without blowing out
 const CLOCK_START = performance.now() * 0.001; // Keep shader time values small to preserve precision
 
 function buildStarVertexShader() {
@@ -40,10 +40,10 @@ function buildStarVertexShader() {
             gl_PointSize = max(1.35, size * (1000.0 / -mvPosition.z));
             float t = 0.5 + 0.5 * sin(uTime * ${STAR_TWINKLE_SPEED} + phase);
             float eased = t * t * (3.0 - 2.0 * t); // Smoothstep-like easing to avoid hard swings
-            float sizeFactor = clamp((size - 10.0) / 20.0, 0.0, 1.0); // Dampen twinkle on tiny stars
-            float sizeEase = pow(sizeFactor, 1.5); // Make small stars nearly steady
-            float scaledAmplitude = ${STAR_TWINKLE_AMPLITUDE} * (0.25 + 0.75 * sizeEase);
-            vOpacity = 0.82 + scaledAmplitude * eased;
+            float sizeFactor = clamp((size - 3.0) / 22.0, 0.0, 1.0); // Let dust participate in twinkle more
+            float sizeEase = pow(sizeFactor, 1.1);
+            float scaledAmplitude = ${STAR_TWINKLE_AMPLITUDE} * mix(0.55, 1.0, sizeEase);
+            vOpacity = 0.8 + scaledAmplitude * eased;
         }
     `;
 }
