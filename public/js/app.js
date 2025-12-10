@@ -20,8 +20,8 @@ const CONFIG = {
 const RELATION_TYPES = window.APP_CONFIG && window.APP_CONFIG.RELATION_TYPES ? window.APP_CONFIG.RELATION_TYPES : ['DATING', 'BEST_FRIEND', 'BROTHER', 'SISTER', 'BEEFING', 'CRUSH'];
 
 // Shared star/particle shader controls
-const STAR_TWINKLE_SPEED = 0.035; // Slower cycle for gentle twinkling
-const STAR_TWINKLE_AMPLITUDE = 0.015; // Keep stars from dipping too dim
+const STAR_TWINKLE_SPEED = 0.03; // Even slower cycle for subtle twinkling
+const STAR_TWINKLE_AMPLITUDE = 0.006; // Keep stars nearly steady
 
 function buildStarVertexShader() {
     return `
@@ -39,8 +39,8 @@ function buildStarVertexShader() {
             float t = sin(uTime * ${STAR_TWINKLE_SPEED} + phase);
             float eased = t * t * (3.0 - 2.0 * t); // Smoothstep-like easing to avoid hard swings
             float sizeFactor = clamp((size - 10.0) / 20.0, 0.0, 1.0); // Dampen twinkle on tiny stars
-            float scaledAmplitude = ${STAR_TWINKLE_AMPLITUDE} * (0.35 + 0.65 * sizeFactor);
-            vOpacity = 0.94 + scaledAmplitude * (eased - 0.5);
+            float scaledAmplitude = ${STAR_TWINKLE_AMPLITUDE} * (0.25 + 0.75 * sizeFactor);
+            vOpacity = 0.97 + scaledAmplitude * (eased - 0.5);
         }
     `;
 }
@@ -927,7 +927,7 @@ function initStarfieldBackground() {
         const group = new THREE.Group();
         group.name = 'starfield-bg';
 
-        const starCount = 10000;
+        const starCount = 7000;
         const geo = new THREE.BufferGeometry();
 
         const pos = [];
