@@ -204,8 +204,9 @@ function animateLoop() {
          const scene = Graph.scene();
          const bg = scene.getObjectByName('starfield-bg');
          if (bg) {
-             bg.rotation.y += 0.00005; // Very subtle rotation
-             // Update shader time for twinkling
+             // Keep the background fixed; rotating the far field caused sub-pixel
+             // jitter that made the tiniest stars appear to flicker even when
+             // twinkle amplitudes were reduced.
              const stars = bg.children[0];
              if(stars && stars.material.uniforms) {
                  stars.material.uniforms.uTime.value = Date.now() * 0.001;
