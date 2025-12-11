@@ -1,14 +1,12 @@
 <?php
 // gspc2/api/messages.php
 require_once '../config/db.php';
+require_once '../config/auth.php';
 require_once '../config/csrf.php';
 
 header('Content-Type: application/json');
 
-if(!isset($_SESSION["user_id"])) {
-    http_response_code(401);
-    exit(json_encode(['error' => 'Unauthorized']));
-}
+require_login();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     checkCsrf();

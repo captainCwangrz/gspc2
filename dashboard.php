@@ -8,6 +8,8 @@ if(!isset($_SESSION["user_id"])) {
     exit;
 }
 
+$csrfToken = generateCsrfToken();
+
 // Fetch fresh user data
 $stmt = $pdo->prepare("SELECT username, real_name, avatar FROM users WHERE id = ?");
 $stmt->execute([$_SESSION['user_id']]);
@@ -24,7 +26,7 @@ if (!$currentUser) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="<?= generateCsrfToken() ?>">
+    <meta name="csrf-token" content="<?= $csrfToken ?>">
     <title>Gossip Chain 3D</title>
     <link rel="stylesheet" href="public/css/style.css">
 
@@ -87,7 +89,10 @@ if (!$currentUser) {
         </div>
         <div class="logout-container">
             <button id="zoom-btn" class="action-btn" style="background: #3b82f6;">Zoom to Me</button>
-            <a href="logout.php" class="logout-link btn-secondary" style="text-decoration: none; text-align: center;">Log Out</a>
+            <form id="logout-form" method="POST" action="logout.php" style="display:none;">
+                <input type="hidden" name="csrf_token" value="<?= $csrfToken ?>">
+            </form>
+            <button class="logout-link btn-secondary" type="button" style="text-decoration: none; text-align: center;" onclick="document.getElementById('logout-form').submit();">Log Out</button>
         </div>
     </div>
 
@@ -109,8 +114,8 @@ if (!$currentUser) {
 
     <div id="chat-hud"></div>
 
-    <script src="public/js/app.js"></script>
-    <script>
+    <script type="module">
+        import { initApp } from './public/js/app.js';
         // Wait for the custom event we added in the head, or fall back to standard load
         function start() {
             // Check if libraries are loaded

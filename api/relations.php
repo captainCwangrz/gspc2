@@ -1,14 +1,12 @@
 <?php
 // gspc2/api/relations.php
 require_once '../config/db.php';
+require_once '../config/auth.php';
 require_once '../config/csrf.php';
 
 header('Content-Type: application/json');
 
-if(!isset($_SESSION["user_id"])) {
-    http_response_code(401);
-    exit(json_encode(['error' => 'Unauthorized']));
-}
+require_login();
 
 // Optimization: Close session to prevent blocking other requests
 // We only need read access to session_id, which we already have.
