@@ -269,10 +269,17 @@ input, button, select, textarea { font-family: inherit; }
 }
 
 .scene-tooltip {
-    /* Increased offset to clear the mouse cursor */
-    transform: translate(20px, 40px) !important;
-    pointer-events: none !important;
+    /* CHANGE: Added !important and increased offset */
+    transform: translate(15px, 45px) !important;
+
+    /* CHANGE: Added margin as a backup to ensure it moves away from cursor */
+    margin-top: 10px !important;
+
     font-family: 'Fredoka', sans-serif !important;
     border-radius: 4px !important;
     z-index: 1000 !important;
+
+    /* Optional: Disable pointer events so the tooltip doesn't "flicker" 
+       if the mouse hovers over the tooltip element itself */
+    pointer-events: none !important;
 }

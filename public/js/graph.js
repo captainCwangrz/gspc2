@@ -404,7 +404,7 @@ function linkRenderer(link) {
     const sprite = new SpriteText(style ? style.label : link.type);
     sprite.fontFace = '"Fredoka", "Varela Round", sans-serif';
     sprite.color = style ? style.color : 'lightgrey';
-    sprite.textHeight = 3;
+    sprite.textHeight = 4.5;
     sprite.backgroundColor = 'rgba(0,0,0,0)';
     sprite.padding = 2;
     if(sprite.material) sprite.material.depthWrite = false;
