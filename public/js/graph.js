@@ -377,7 +377,8 @@ function nodeRenderer(node) {
     nameSprite.fontFace = '"Orbitron", "Noto Sans SC", sans-serif';
     nameSprite.textHeight = 2.5;
     nameSprite.backgroundColor = null;
-    nameSprite.position.y = -12;
+    nameSprite.center.set(0.5, 1);
+    nameSprite.position.y = -9;
     if (nameSprite.material) nameSprite.material.depthWrite = false;
     group.add(nameSprite);
 
@@ -401,7 +402,7 @@ function linkRenderer(link) {
     }
 
     const sprite = new SpriteText(style ? style.label : link.type);
-    sprite.fontFace = '"Varela Round", sans-serif';
+    sprite.fontFace = '"Fredoka", "Varela Round", sans-serif';
     sprite.color = style ? style.color : 'lightgrey';
     sprite.textHeight = 3;
     sprite.backgroundColor = 'rgba(0,0,0,0)';
