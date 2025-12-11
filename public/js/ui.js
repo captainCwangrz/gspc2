@@ -98,7 +98,8 @@ export function updateRequestsUI(requests) {
     updateHudVisibility();
 }
 
-export function updateNotificationHUD(nodes) {
+// Renamed from updateUnreadMessagesUI to align with module imports in app.js
+export function updateNotificationHUD(nodes = []) {
     const container = document.getElementById('unread-msgs-container');
     const list = document.getElementById('unread-msgs-list');
     if (!container || !list) return;

@@ -31,6 +31,11 @@ if(isset($_SESSION["user_id"])) {
                     <?php
                         if($_GET['error']=='invalid_credentials') echo "Invalid username or password.";
                         if($_GET['error']=='username_exists') echo "Username already taken.";
+                        if($_GET['error']=='invalid_username_format') echo "Username must be 3-20 chars (letters, numbers, _).";
+                        if($_GET['error']=='password_too_short') echo "Password must be at least 8 characters.";
+                        if($_GET['error']=='name_too_long') echo "Real name is too long.";
+                        if($_GET['error']=='invalid_date') echo "Date of birth must be in YYYY-MM-DD format.";
+                        if($_GET['error']=='missing_fields') echo "Please complete all required fields.";
                         if($_GET['error']=='unknown') echo "An unknown error occurred.";
                     ?>
                 </div>
