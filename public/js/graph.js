@@ -178,7 +178,7 @@ export function initStarfieldBackground() {
             colors.push(baseColor.r, baseColor.g, baseColor.b);
 
             const rand = Math.random();
-            const size = 1.2 + Math.pow(rand, 2.5) * 18.0;
+            const size = 1.2 + Math.pow(rand, 2.5) * 13.2;
             sizes.push(size);
 
             phases.push(Math.random() * Math.PI * 2);
