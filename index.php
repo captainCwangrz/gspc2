@@ -20,7 +20,7 @@ if(isset($_SESSION["user_id"])) {
     <div class="login-container">
         <div class="login-header">
             <h1>Gossip Chain</h1>
-            <p>Enter the Neural Network</p>
+            <p>Enter the Gossip Network</p>
         </div>
 
         <!-- Login Section -->
