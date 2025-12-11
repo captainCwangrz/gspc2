@@ -31,9 +31,10 @@ if (!$currentUser) {
     <script type="importmap">
     {
         "imports": {
-            "three": "https://esm.sh/three@0.181.2",
-            "three-spritetext": "https://esm.sh/three-spritetext@1.10.0?external=three",
-            "3d-force-graph": "https://esm.sh/3d-force-graph@1.79.0?external=three"
+            "three": "https://esm.sh/three@0.181.2?target=es2022",
+            "three/": "https://esm.sh/three@0.181.2/?target=es2022",
+            "three-spritetext": "https://esm.sh/three-spritetext@1.10.0?external=three&target=es2022",
+            "3d-force-graph": "https://esm.sh/3d-force-graph@1.79.0?external=three&target=es2022"
         }
     }
     </script>
@@ -43,12 +44,12 @@ if (!$currentUser) {
         import SpriteText from 'three-spritetext';
         import ForceGraph3D from '3d-force-graph';
 
-        // Expose these as globals so app.js can find them
+        // Expose as globals for app.js
         window.THREE = THREE;
         window.SpriteText = SpriteText;
         window.ForceGraph3D = ForceGraph3D;
-        
-        // Dispatch a custom event to signal libraries are ready
+
+        // Signal that libraries are ready
         window.dispatchEvent(new Event('lib-ready'));
     </script>
     <script>
