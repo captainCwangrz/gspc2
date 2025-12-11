@@ -1,5 +1,7 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Noto+Sans+SC:wght@400;700&display=swap');
+
 /* public/css/style.css */
-body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Roboto, sans-serif; background: #000; color: white; }
+body { margin: 0; overflow: hidden; font-family: 'Orbitron', 'Noto Sans SC', 'Segoe UI', sans-serif; background: #000; color: white; }
 
 /* HUD Common */
 .hud-panel {
