@@ -146,7 +146,7 @@ function mergeGraphData(nodes, links, incremental = false) {
 
     const nodeMap = new Map((incremental && !State.isFirstLoad) ? State.graphData.nodes.map(n => [n.id, n]) : []);
 
-    if (nodes.length !== previousNodeCount) {
+    if (!incremental && nodes.length !== previousNodeCount) {
         hasTopologyChanges = true;
     }
 
@@ -173,7 +173,7 @@ function mergeGraphData(nodes, links, incremental = false) {
 
     const linkMap = new Map((incremental && !State.isFirstLoad) ? State.graphData.links.map(l => [linkKey(l), l]) : []);
 
-    if (links.length !== previousLinkCount) {
+    if (!incremental && links.length !== previousLinkCount) {
         hasTopologyChanges = true;
     }
 
