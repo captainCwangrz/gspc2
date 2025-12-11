@@ -375,9 +375,10 @@ function nodeRenderer(node) {
     const nameSprite = new SpriteText(node.name);
     nameSprite.color = 'white';
     nameSprite.fontFace = '"Orbitron", "Noto Sans SC", sans-serif';
-    nameSprite.textHeight = 5;
-    nameSprite.backgroundColor = 'rgba(0,0,0,0)';
-    nameSprite.position.y = -22;
+    nameSprite.textHeight = 2.5;
+    nameSprite.backgroundColor = null;
+    nameSprite.position.y = -12;
+    if (nameSprite.material) nameSprite.material.depthWrite = false;
     group.add(nameSprite);
 
     return group;
@@ -400,6 +401,7 @@ function linkRenderer(link) {
     }
 
     const sprite = new SpriteText(style ? style.label : link.type);
+    sprite.fontFace = '"Varela Round", sans-serif';
     sprite.color = style ? style.color : 'lightgrey';
     sprite.textHeight = 3;
     sprite.backgroundColor = 'rgba(0,0,0,0)';
