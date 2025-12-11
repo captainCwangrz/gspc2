@@ -58,14 +58,14 @@ function updateHudVisibility() {
     const hud = document.getElementById('notif-hud');
     const toastList = document.getElementById('toast-list');
     const reqList = document.getElementById('requests-container');
-    const unreadList = document.getElementById('unread-msgs-container');
+    const notificationList = document.getElementById('unread-msgs-container');
 
     const hasToasts = toastList && toastList.children.length > 0;
     const hasReqs = reqList && reqList.style.display !== 'none';
-    const hasUnreads = unreadList && unreadList.style.display !== 'none';
+    const hasNotifications = notificationList && notificationList.style.display !== 'none';
 
     if (hud) {
-        hud.style.display = (hasToasts || hasReqs || hasUnreads) ? 'block' : 'none';
+        hud.style.display = (hasToasts || hasReqs || hasNotifications) ? 'block' : 'none';
     }
 }
 
@@ -98,12 +98,12 @@ export function updateRequestsUI(requests) {
     updateHudVisibility();
 }
 
-export function updateUnreadMessagesUI(nodes) {
+export function updateNotificationHUD(nodes) {
     const container = document.getElementById('unread-msgs-container');
     const list = document.getElementById('unread-msgs-list');
     if (!container || !list) return;
 
-    const unreadNodes = nodes.filter(n => n.hasUnread && n.id !== State.userId);
+    const unreadNodes = nodes.filter(n => n.hasActiveNotification && n.id !== State.userId);
 
     if (unreadNodes.length === 0) {
         container.style.display = 'none';
@@ -280,12 +280,12 @@ function openChat(userId, encodedName) {
             });
         }
 
-        node.hasUnread = false;
+        node.hasActiveNotification = false;
         if(node.draw) {
              node.draw(node.img);
              node.texture.needsUpdate = true;
         }
-        updateUnreadMessagesUI(State.graphData.nodes);
+        updateNotificationHUD(State.graphData.nodes);
     }
 
     const toasts = document.querySelectorAll(`.toast[data-user-id="${userId}"]`);

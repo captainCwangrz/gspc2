@@ -1,6 +1,6 @@
 import { fetchGraphData, syncReadReceipts } from './api.js';
 import { createGraph, animateGraph, initStarfieldBackground } from './graph.js';
-import { initUI, updateRequestsUI, updateUnreadMessagesUI, showToast, escapeHtml } from './ui.js';
+import { initUI, updateRequestsUI, updateNotificationHUD, showToast, escapeHtml } from './ui.js';
 
 const CONFIG = {
     pollInterval: 3000,
@@ -99,7 +99,7 @@ function applyGraphPayload(data) {
     applyLastMessages(data.last_messages || {});
 
     updateRequestsUI(data.requests || []);
-    updateUnreadMessagesUI(State.graphData.nodes);
+    updateNotificationHUD(State.graphData.nodes);
 
     if (topologyChanged || State.isFirstLoad) {
         Graph.graphData(State.graphData);
@@ -244,8 +244,8 @@ function applyLastMessages(lastMessages) {
                     sessionStorage.setItem(toastKey, serverLastMsgId);
                 }
                 
-                // 标记为未读，供 HUD 列表使用
-                node.hasUnread = true;
+                // 标记为通知待处理，供 HUD 列表使用
+                node.hasActiveNotification = true;
             }
         }
     });

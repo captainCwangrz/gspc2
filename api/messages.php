@@ -26,28 +26,66 @@ function checkRelationship(int $from_id, int $to_id, PDO $pdo): bool {
     return (bool) $stmt->fetchColumn();
 }
 
+function userExists(int $userId, PDO $pdo): bool {
+    $stmt = $pdo->prepare('SELECT 1 FROM users WHERE id = ?');
+    $stmt->execute([$userId]);
+    return (bool) $stmt->fetchColumn();
+}
+
 try {
     // Send Message
     if ($action === "send") {
         $to_id = (int)($_POST["to_id"] ?? 0);
         $message = trim($_POST["message"] ?? "");
 
+        if (!$to_id || !userExists($to_id, $pdo)) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Target user not found']);
+            exit;
+        }
+
+        if ($message === "") {
+            http_response_code(400);
+            echo json_encode(['error' => 'Message cannot be empty']);
+            exit;
+        }
+
+        $messageLength = function_exists('mb_strlen') ? mb_strlen($message, 'UTF-8') : strlen($message);
+        if ($messageLength > 1000) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Message too long']);
+            exit;
+        }
+
         // Strict check: Must have active relationship to send
-        if ($to_id && $message !== "" && checkRelationship($user_id, $to_id, $pdo)) {
+        if (!checkRelationship($user_id, $to_id, $pdo)) {
+            http_response_code(403);
+            echo json_encode(['error' => 'Relationship required to send messages']);
+            exit;
+        }
+
+        try {
+            $pdo->beginTransaction();
             $stmt = $pdo->prepare('INSERT INTO messages (from_id, to_id, message) VALUES (?, ?, ?)');
             $stmt->execute([$user_id, $to_id, $message]);
+            $msgId = (int)$pdo->lastInsertId();
+
+            $updateStmt = $pdo->prepare(
+                'UPDATE relationships
+                 SET last_msg_id = ?, last_msg_time = NOW(), updated_at = NOW()
+                 WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)' 
+            );
+            $updateStmt->execute([$msgId, $user_id, $to_id, $to_id, $user_id]);
+
+            $pdo->commit();
             echo json_encode(['success' => true]);
-        } else {
-            // Determine detailed error
-            if (!$to_id || $message === "") {
-                http_response_code(400);
-                echo json_encode(['error' => 'Invalid parameters']);
-            } else {
-                // No relationship
-                http_response_code(403);
-                echo json_encode(['error' => 'Relationship required to send messages']);
+        } catch (Exception $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
             }
+            throw $e;
         }
+
         exit;
     }
 
@@ -84,6 +122,12 @@ try {
         $before_id = (int)($_GET["before_id"] ?? 0);
         $limit = (int)($_GET["limit"] ?? 50);
         if ($limit > 100) $limit = 100; // Hard cap limit
+
+        if (!$to_id || !userExists($to_id, $pdo)) {
+            http_response_code(404);
+            echo json_encode(['error' => 'Target user not found']);
+            exit;
+        }
 
         // Relaxed check: Allow viewing history if user was a participant, even if relationship is gone.
         if ($to_id) {

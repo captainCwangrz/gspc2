@@ -16,6 +16,9 @@ $username = trim($_POST["username"] ?? "");
 $password = $_POST["password"] ?? "";
 
 if ($action === "login") {
+    if (!preg_match('/^[a-zA-Z0-9_]{3,20}$/', $username)) exit("Invalid username format.");
+    if (strlen($password) < 8) exit("Password must be at least 8 characters.");
+
     $stmt = $pdo->prepare('SELECT id, username, real_name, password_hash, avatar FROM users WHERE username=?');
     $stmt->execute([$username]);
     $user = $stmt->fetch();
@@ -38,6 +41,11 @@ if ($action === "register") {
     $dob = $_POST["dob"] ?? "";
 
     if (!$username || !$password || !$real_name || !$dob) exit("Missing fields!");
+
+    if (!preg_match('/^[a-zA-Z0-9_]{3,20}$/', $username)) exit("Invalid username format.");
+    if (strlen($password) < 8) exit("Password must be at least 8 characters.");
+    $realNameLength = function_exists('mb_strlen') ? mb_strlen($real_name, 'UTF-8') : strlen($real_name);
+    if ($realNameLength > 50) exit("Real name too long.");
 
     // Validate DOB (Strict YYYY-MM-DD)
     $d = DateTime::createFromFormat('Y-m-d', $dob);
