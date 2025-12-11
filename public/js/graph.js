@@ -95,6 +95,22 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
             node.fz = node.z;
         });
 
+    // ---------------------------------------------------------
+    // PHYSICS TWEAKS TO FIX BUNCHING
+    // ---------------------------------------------------------
+
+    // 1. Increase Repulsion (Charge)
+    // Default is usually around -30. Making it more negative (-150)
+    // pushes nodes apart more aggressively, expanding the whole cluster.
+    graphRef.d3Force('charge').strength(-150);
+
+    // 2. Increase Link Distance
+    // Default is usually around 30. Increasing this (e.g., to 80 or 100)
+    // makes the "strings" connecting nodes longer.
+    graphRef.d3Force('link').distance(100);
+
+    // ---------------------------------------------------------
+
     const renderer = graphRef.renderer && graphRef.renderer();
     if (renderer) {
         renderer.useLegacyLights = false;
