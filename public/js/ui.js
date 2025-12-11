@@ -47,6 +47,7 @@ export function initUI({ state, config, relationTypes: relTypes, refreshData }) 
     window.closeChat = closeChat;
     window.loadMsgs = loadMsgs;
     window.sendMsg = sendMsg;
+    window.zoomToUser = zoomToUser;
 }
 
 export function escapeHtml(text) {
@@ -121,6 +122,22 @@ export function updateNotificationHUD(nodes = []) {
     updateHudVisibility();
 }
 
+function zoomToUser(userId) {
+    const node = State?.graphData?.nodes?.find(user => user.id === userId);
+    if (node && window.handleNodeClick) {
+        window.handleNodeClick(node);
+    }
+
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) searchInput.value = '';
+
+    const resultsContainer = document.getElementById('search-results');
+    if (resultsContainer) {
+        resultsContainer.innerHTML = '';
+        resultsContainer.style.display = 'none';
+    }
+}
+
 function handleSearch(e) {
     const searchTerm = e.target.value.toLowerCase();
     const resultsContainer = document.getElementById('search-results');
@@ -142,7 +159,7 @@ function handleSearch(e) {
         resultsContainer.innerHTML = '<div class="search-result-item">No users found.</div>';
     } else {
         resultsContainer.innerHTML = hits.map(n => `
-            <div class="search-result-item" onclick="window.handleNodeClick(State.graphData.nodes.find(user => user.id === ${n.id})); document.getElementById('search-input').value=''; document.getElementById('search-results').style.display='none';">
+            <div class="search-result-item" onclick="window.zoomToUser(${n.id})">
                 ${escapeHtml(n.name)}
             </div>
         `).join('');
