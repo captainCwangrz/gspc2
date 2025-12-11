@@ -43,5 +43,6 @@ try {
     echo json_encode(['success' => true, 'message' => 'Signature updated successfully.']);
 } catch (PDOException $e) {
     http_response_code(500);
-    echo json_encode(['error' => 'Database error: ' . $e->getMessage()]);
+    error_log('Profile update failed: ' . $e->getMessage());
+    echo json_encode(['error' => 'Internal Server Error']);
 }

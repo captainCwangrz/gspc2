@@ -154,9 +154,15 @@ try {
     else {
         echo json_encode(['success' => false, 'message' => 'Unknown action']);
     }
+} catch (PDOException $e) {
+    if ($pdo->inTransaction()) $pdo->rollBack();
+    error_log('Relations endpoint PDO error: ' . $e->getMessage());
+    http_response_code(500);
+    echo json_encode(['error' => 'Internal Server Error']);
 } catch (Exception $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
+    error_log('Relations endpoint error: ' . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['error' => $e->getMessage()]);
+    echo json_encode(['error' => 'Internal Server Error']);
 }
 ?>

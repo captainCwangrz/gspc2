@@ -2,19 +2,16 @@ import { fetchGraphData, syncReadReceipts } from './api.js';
 import { createGraph, animateGraph, initStarfieldBackground } from './graph.js';
 import { initUI, updateRequestsUI, updateNotificationHUD, showToast, escapeHtml } from './ui.js';
 
-const CONFIG = {
-    pollInterval: 3000,
-    relStyles: window.APP_CONFIG && window.APP_CONFIG.RELATION_STYLES ? window.APP_CONFIG.RELATION_STYLES : {
-        'DATING': { color: '#ec4899', particle: true, label: '❤️ Dating' },
-        'BEST_FRIEND': { color: '#3b82f6', particle: false, label: '💎 Bestie' },
-        'BROTHER': { color: '#10b981', particle: false, label: '👊 Bro' },
-        'SISTER': { color: '#10b981', particle: false, label: '🌸 Sis' },
-        'BEEFING': { color: '#ef4444', particle: true, label: '💀 Beefing' },
-        'CRUSH': { color: '#a855f7', particle: true, label: '✨ Crush' }
-    }
-};
+if (!window.APP_CONFIG) {
+    console.error('APP_CONFIG is missing. Unable to initialize application configuration.');
+}
 
-const RELATION_TYPES = window.APP_CONFIG && window.APP_CONFIG.RELATION_TYPES ? window.APP_CONFIG.RELATION_TYPES : ['DATING', 'BEST_FRIEND', 'BROTHER', 'SISTER', 'BEEFING', 'CRUSH'];
+const CONFIG = window.APP_CONFIG ? {
+    pollInterval: 3000,
+    relStyles: window.APP_CONFIG.RELATION_STYLES
+} : null;
+
+const RELATION_TYPES = window.APP_CONFIG ? (window.APP_CONFIG.RELATION_TYPES || []) : [];
 
 export const State = {
     userId: null,
@@ -33,6 +30,11 @@ let Graph = null;
 let pollTimer = null;
 
 export function initApp(userId) {
+    if (!CONFIG || !CONFIG.relStyles) {
+        console.error('Required configuration missing. Aborting initialization.');
+        return;
+    }
+
     State.userId = userId;
     const elem = document.getElementById('3d-graph');
 
@@ -70,10 +72,12 @@ async function hydrateReadReceipts() {
 }
 
 async function loadGraphData() {
+    if (!CONFIG) return;
+    let nextDelay = CONFIG.pollInterval;
     try {
-        const response = await fetchGraphData({ etag: State.etag, lastUpdate: State.lastUpdate });
+        const response = await fetchGraphData({ etag: State.etag, lastUpdate: State.lastUpdate, wait: true });
         if (response.status === 304 || !response.data) {
-            scheduleNextPoll();
+            nextDelay = response.timedOut ? 0 : CONFIG.pollInterval;
             return;
         }
 
@@ -82,13 +86,13 @@ async function loadGraphData() {
     } catch (e) {
         console.error('Polling error:', e);
     } finally {
-        scheduleNextPoll();
+        scheduleNextPoll(nextDelay);
     }
 }
 
-function scheduleNextPoll() {
+function scheduleNextPoll(delay = CONFIG ? CONFIG.pollInterval : 3000) {
     if (pollTimer) clearTimeout(pollTimer);
-    pollTimer = setTimeout(loadGraphData, CONFIG.pollInterval);
+    pollTimer = setTimeout(loadGraphData, delay);
 }
 
 function applyGraphPayload(data) {

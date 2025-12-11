@@ -24,7 +24,9 @@ class Database {
                 if ($e->getCode() == 1049) {
                     self::initSystem();
                 } else {
-                    die("Database Connection Error: " . $e->getMessage());
+                    error_log('Database Connection Error: ' . $e->getMessage());
+                    http_response_code(500);
+                    exit('Internal Server Error');
                 }
             }
 
@@ -105,7 +107,9 @@ class Database {
             self::$pdo->exec($sql);
 
         } catch (PDOException $e) {
-            die("Init Error: " . $e->getMessage());
+            error_log('Init Error: ' . $e->getMessage());
+            http_response_code(500);
+            exit('Internal Server Error');
         }
     }
 }
