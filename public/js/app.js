@@ -22,7 +22,7 @@ const RELATION_TYPES = window.APP_CONFIG && window.APP_CONFIG.RELATION_TYPES ? w
 // Shared star/particle shader controls
 // Faster + deeper twinkles so the effect is visible on both the background and beam particles
 const STAR_TWINKLE_SPEED = 2.8; // ~2.2s full cycle for a clear pulse
-const STAR_TWINKLE_AMPLITUDE = 0.68; // Stronger brightening while keeping highlights controlled
+const STAR_TWINKLE_AMPLITUDE = 0.9; // Stronger brightening while keeping highlights controlled
 const CLOCK_START = performance.now() * 0.001; // Keep shader time values small to preserve precision
 
 function buildStarVertexShader() {
@@ -40,10 +40,10 @@ function buildStarVertexShader() {
             gl_PointSize = max(1.35, size * (1000.0 / -mvPosition.z));
             float t = 0.5 + 0.5 * sin(uTime * ${STAR_TWINKLE_SPEED} + phase);
             float eased = t * t * (3.0 - 2.0 * t); // Smoothstep-like easing to avoid hard swings
-            float sizeFactor = clamp((size - 3.0) / 22.0, 0.0, 1.0); // Let dust participate in twinkle more
-            float sizeEase = pow(sizeFactor, 1.1);
-            float scaledAmplitude = ${STAR_TWINKLE_AMPLITUDE} * mix(0.55, 1.0, sizeEase);
-            vOpacity = 0.8 + scaledAmplitude * eased;
+            float sizeFactor = clamp((size - 3.0) / 24.0, 0.0, 1.0); // Let dust participate in twinkle more
+            float sizeEase = pow(sizeFactor, 1.05);
+            float scaledAmplitude = ${STAR_TWINKLE_AMPLITUDE} * mix(0.55, 1.08, sizeEase);
+            vOpacity = 0.78 + scaledAmplitude * eased;
         }
     `;
 }
@@ -956,12 +956,12 @@ function initStarfieldBackground() {
 
         // Refined Palette (Subtle variety, high saturation)
         const colorPalette = [
-            new THREE.Color('#b3cfff'), // Crisp Blue
-            new THREE.Color('#d1dfff'), // Soft Blue-White
-            new THREE.Color('#ffffff'), // Pure White
-            new THREE.Color('#fff2e0'), // Warm White
-            new THREE.Color('#ffe0b5'), // Soft Gold
-            new THREE.Color('#ffcfcf')  // Faint Rose (Variety)
+            new THREE.Color('#a9c6ff'), // Crisp Blue
+            new THREE.Color('#c8d6ff'), // Soft Blue-White
+            new THREE.Color('#f0f3ff'), // Gentle Mist (replaces pure white)
+            new THREE.Color('#f9eddc'), // Warm White
+            new THREE.Color('#ffd7b0'), // Soft Gold
+            new THREE.Color('#f5c4c4')  // Faint Rose (Variety)
         ];
 
         for(let i=0; i<starCount; i++) {
@@ -982,8 +982,8 @@ function initStarfieldBackground() {
             const hsl = {};
             c.getHSL(hsl);
             // subtle shift
-            hsl.s = Math.min(1.0, hsl.s * (1.05 + Math.random() * 0.3));
-            hsl.l = Math.min(1.0, hsl.l * (1.0 + Math.random() * 0.14));
+            hsl.s = Math.min(1.0, hsl.s * (1.05 + Math.random() * 0.25));
+            hsl.l = Math.min(1.0, hsl.l * (0.92 + Math.random() * 0.12));
             const c2 = new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l);
             colors.push(c2.r, c2.g, c2.b);
 
@@ -991,12 +991,12 @@ function initStarfieldBackground() {
             // Base range: slightly larger for brighter impressions
             const rand = Math.random();
             const sizeBias = Math.pow(rand, 1.6);
-            let size = 11.0 + sizeBias * 22.0; // Range ~11.0 to ~33.0
+            let size = 12.0 + sizeBias * 27.0; // Range ~12.0 to ~39.0
 
             // "Foreground" / Hero Stars: Slightly higher chance to be large/pronounced
             // 5% chance to be a large "hero" star (Size 28-36)
             if (Math.random() < 0.05) {
-                size = 28.0 + Math.random() * 8.0;
+                size = 34.0 + Math.random() * 12.0;
             }
 
             sizes.push(size);
