@@ -95,13 +95,15 @@ function applyGraphPayload(data) {
     const incomingNodes = data.nodes || [];
     const incomingLinks = data.links || [];
 
-    mergeGraphData(incomingNodes, incomingLinks, data.incremental);
+    const topologyChanged = mergeGraphData(incomingNodes, incomingLinks, data.incremental);
     applyLastMessages(data.last_messages || {});
 
     updateRequestsUI(data.requests || []);
     updateUnreadMessagesUI(State.graphData.nodes);
 
-    Graph.graphData(State.graphData);
+    if (topologyChanged || State.isFirstLoad) {
+        Graph.graphData(State.graphData);
+    }
 
     const me = State.graphData.nodes.find(n => n.id === State.userId);
     if (me) {
@@ -126,6 +128,11 @@ function applyGraphPayload(data) {
 }
 
 function mergeGraphData(nodes, links, incremental = false) {
+    let hasTopologyChanges = false;
+
+    const previousNodeCount = State.graphData.nodes.length;
+    const previousLinkCount = State.graphData.links.length;
+
     const existingPositions = new Map();
     State.graphData.nodes.forEach(n => {
         if (n.x !== undefined) {
@@ -138,19 +145,25 @@ function mergeGraphData(nodes, links, incremental = false) {
     });
 
     const nodeMap = new Map((incremental && !State.isFirstLoad) ? State.graphData.nodes.map(n => [n.id, n]) : []);
+
+    if (nodes.length !== previousNodeCount) {
+        hasTopologyChanges = true;
+    }
+
     nodes.forEach(n => {
+        if (!nodeMap.has(n.id)) {
+            hasTopologyChanges = true;
+        }
+
         const previous = nodeMap.get(n.id) || {};
-        const merged = { ...previous, ...n };
+        const { last_msg_id, ...nodeProps } = n;
+        const merged = { ...previous, ...nodeProps };
         const oldPos = existingPositions.get(n.id);
         if (oldPos) Object.assign(merged, oldPos);
         nodeMap.set(n.id, merged);
     });
 
-    if (!incremental || State.isFirstLoad) {
-        State.graphData.nodes = Array.from(nodeMap.values());
-    } else {
-        State.graphData.nodes = Array.from(nodeMap.values());
-    }
+    State.graphData.nodes = Array.from(nodeMap.values());
 
     const linkKey = (l) => {
         const s = typeof l.source === 'object' ? l.source.id : l.source;
@@ -159,12 +172,24 @@ function mergeGraphData(nodes, links, incremental = false) {
     };
 
     const linkMap = new Map((incremental && !State.isFirstLoad) ? State.graphData.links.map(l => [linkKey(l), l]) : []);
+
+    if (links.length !== previousLinkCount) {
+        hasTopologyChanges = true;
+    }
+
     links.forEach(l => {
-        const existing = linkMap.get(linkKey(l)) || {};
-        linkMap.set(linkKey(l), { ...existing, ...l });
+        const key = linkKey(l);
+        if (!linkMap.has(key)) {
+            hasTopologyChanges = true;
+        }
+
+        const existing = linkMap.get(key) || {};
+        linkMap.set(key, { ...existing, ...l });
     });
 
     State.graphData.links = Array.from(linkMap.values());
+
+    return hasTopologyChanges;
 }
 
 function applyLastMessages(lastMessages) {

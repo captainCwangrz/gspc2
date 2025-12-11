@@ -166,11 +166,19 @@ export function initStarfieldBackground() {
             pos.push(x, y, z);
 
             const baseColor = new THREE.Color();
-            baseColor.setHSL(0.55 + Math.random() * 0.1, 0.45 + Math.random() * 0.2, 0.45 + Math.random() * 0.3);
+            const colorRoll = Math.random();
+            const saturation = 0.7 + Math.random() * 0.3;
+            const lightness = 0.45 + Math.random() * 0.3;
+
+            if (colorRoll < 0.35) {
+                baseColor.setHSL(Math.random() * 0.15, saturation, lightness);
+            } else {
+                baseColor.setHSL(0.55 + Math.random() * 0.2, saturation, lightness);
+            }
             colors.push(baseColor.r, baseColor.g, baseColor.b);
 
             const rand = Math.random();
-            const size = 1.2 + Math.pow(rand, 2.5) * 24.0;
+            const size = 1.2 + Math.pow(rand, 2.5) * 18.0;
             sizes.push(size);
 
             phases.push(Math.random() * Math.PI * 2);
