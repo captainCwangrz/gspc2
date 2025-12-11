@@ -168,15 +168,61 @@ function mergeGraphData(nodes, links, incremental = false) {
 }
 
 function applyLastMessages(lastMessages) {
+    // 遍历所有节点（注意：这里遍历的是本地的全量节点 State.graphData.nodes）
     State.graphData.nodes.forEach(node => {
         const keyName = String(node.id);
+        
+        // 1. 获取后端传来的最新消息 ID
+        let serverLastMsgId = 0;
         if (Object.prototype.hasOwnProperty.call(lastMessages, keyName)) {
-            node.last_msg_id = parseInt(lastMessages[keyName]);
+            serverLastMsgId = parseInt(lastMessages[keyName]);
         }
-        const lastId = node.last_msg_id || 0;
-        const key = `read_msg_id_${State.userId}_${node.id}`;
-        const readId = parseInt(localStorage.getItem(key) || '0');
-        node.hasUnread = lastId > readId && !State.activeChats.has(node.id);
+
+        // 如果没有消息变动，直接跳过（性能优化）
+        if (serverLastMsgId <= (node.last_msg_id || 0)) {
+            return; 
+        }
+
+        // 更新本地节点状态
+        node.last_msg_id = serverLastMsgId;
+
+        // 2. 核心逻辑：判断是“刷新聊天”还是“显示通知”
+        const readKey = `read_msg_id_${State.userId}_${node.id}`;
+        const localReadId = parseInt(localStorage.getItem(readKey) || '0');
+
+        // 只有当服务器消息 ID 大于本地已读 ID 时，才算“新消息”
+        if (serverLastMsgId > localReadId) {
+            
+            // A. 如果聊天窗口是打开的 -> 自动刷新消息
+            if (State.activeChats.has(node.id)) {
+                // 调用 UI 层的加载消息函数（它会自动追加新消息）
+                if (window.loadMsgs) {
+                    window.loadMsgs(node.id);
+                }
+            } 
+            // B. 如果聊天窗口没打开 -> 弹 Toast 通知
+            else {
+                // 使用 sessionStorage 防止同一个消息 ID 重复弹窗
+                const toastKey = `last_toasted_msg_${State.userId}_${node.id}`;
+                const lastToastedId = parseInt(sessionStorage.getItem(toastKey) || '0');
+
+                if (serverLastMsgId > lastToastedId) {
+                    if (window.showToast) {
+                        window.showToast(
+                            `New message from ${node.name}`,
+                            'info',
+                            3000, // 3秒自动消失
+                            () => window.openChat(node.id, encodeURIComponent(node.name)), // 点击打开聊天
+                            { userId: node.id }
+                        );
+                    }
+                    sessionStorage.setItem(toastKey, serverLastMsgId);
+                }
+                
+                // 标记为未读，供 HUD 列表使用
+                node.hasUnread = true;
+            }
+        }
     });
 }
 
