@@ -45,6 +45,7 @@ try {
             if(!$checkReq->fetch()) {
                 $stmt = $pdo->prepare('INSERT INTO requests (from_id, to_id, type) VALUES (?, ?, ?)');
                 $stmt->execute([$user_id, $to_id, $type]);
+                updateSystemState($pdo);
                 echo json_encode(['success' => true]);
             } else {
                 echo json_encode(['success' => false, 'error' => 'Request pending']);
@@ -72,6 +73,7 @@ try {
                 if (!$checkReq->fetch()) {
                     $stmt = $pdo->prepare('INSERT INTO requests (from_id, to_id, type) VALUES (?, ?, ?)');
                     $stmt->execute([$user_id, $to_id, $type]);
+                    updateSystemState($pdo);
                     echo json_encode(['success' => true, 'message' => 'Update request sent']);
                 } else {
                     echo json_encode(['success' => false, 'error' => 'Request pending']);
@@ -116,6 +118,7 @@ try {
                     $ins = $pdo->prepare('INSERT INTO relationships (from_id, to_id, type) VALUES (?,?,?)');
                     $ins->execute([$request['from_id'], $request['to_id'], $request['type']]);
                 }
+                updateSystemState($pdo);
                 $pdo->commit();
                 echo json_encode(['success' => true]);
             } catch (PDOException $e) {
@@ -136,6 +139,7 @@ try {
         $req_id = (int)($_POST["request_id"] ?? 0);
         $stmt = $pdo->prepare('UPDATE requests SET status = "REJECTED" WHERE id=? AND to_id=?');
         $stmt->execute([$req_id, $user_id]);
+        updateSystemState($pdo);
         echo json_encode(['success' => true]);
     }
     // 删除关系
@@ -145,6 +149,7 @@ try {
             $sql = 'DELETE FROM relationships WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)';
             $stmt = $pdo->prepare($sql);
             $stmt->execute([$user_id, $to_id, $to_id, $user_id]);
+            updateSystemState($pdo);
             echo json_encode(['success' => true]);
         }
     }

@@ -38,8 +38,9 @@ if ($action === "register") {
 
     if (!$username || !$password || !$real_name || !$dob) exit("Missing fields!");
 
-    // Validate DOB (Basic check)
-    if (!strtotime($dob)) exit("Invalid Date of Birth");
+    // Validate DOB (Strict YYYY-MM-DD)
+    $d = DateTime::createFromFormat('Y-m-d', $dob);
+    if (!$d || $d->format('Y-m-d') !== $dob) exit("Invalid Date");
 
     $avatar = $_POST["avatar"] ?? FALLBACK_AVATAR;
     if (!in_array($avatar, AVATARS)) $avatar = FALLBACK_AVATAR;
@@ -51,6 +52,7 @@ if ($action === "register") {
     try {
         $stmt = $pdo->prepare('INSERT INTO users (username, real_name, dob, password_hash, avatar) VALUES (?, ?, ?, ?, ?)');
         $stmt->execute([$username, $real_name, $dob, $password_hash, $avatar]);
+        updateSystemState($pdo);
     } catch (PDOException $e) {
         if ($e->getCode() === "23000" && strpos($e->getMessage(), "username") !== false) {
             header("Location: ../index.php?error=username_exists");

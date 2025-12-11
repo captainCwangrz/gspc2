@@ -164,8 +164,16 @@ function initApp(userId) {
 
     // Start Loops
     syncReadReceipts().then(() => {
-        fetchData();
-        setInterval(fetchData, CONFIG.pollInterval);
+        async function poll() {
+            try {
+                await fetchData();
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setTimeout(poll, CONFIG.pollInterval);
+            }
+        }
+        poll();
     });
 
     // Start Visual Loops

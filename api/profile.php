@@ -22,7 +22,7 @@ session_write_close(); // Prevent blocking
 $new_signature = trim($_POST['signature'] ?? '');
 
 // Sanitization
-$new_signature = strip_tags($new_signature);
+$new_signature = htmlspecialchars($new_signature, ENT_QUOTES, 'UTF-8');
 
 if (empty($new_signature)) {
     http_response_code(400);
@@ -39,6 +39,7 @@ if (mb_strlen($new_signature) > 160) {
 try {
     $stmt = $pdo->prepare('UPDATE users SET signature = ? WHERE id = ?');
     $stmt->execute([$new_signature, $user_id]);
+    updateSystemState($pdo);
     echo json_encode(['success' => true, 'message' => 'Signature updated successfully.']);
 } catch (PDOException $e) {
     http_response_code(500);

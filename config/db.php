@@ -19,9 +19,6 @@ class Database {
                     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 ]);
 
-                // Ensure schema is up to date (Migration logic)
-                self::ensureSchema(self::$pdo);
-
             } catch (PDOException $e) {
                 // If database doesn't exist, try to init
                 if ($e->getCode() == 1049) {
@@ -178,6 +175,10 @@ class Database {
             die("Init Error: " . $e->getMessage());
         }
     }
+}
+
+function updateSystemState($pdo) {
+    $pdo->exec("UPDATE system_state SET last_update = NOW() WHERE id = 1");
 }
 
 // Helper constants
