@@ -282,44 +282,34 @@ function createSpaceDust(color) {
 function nodeRenderer(node) {
     const cacheKey = `${node.avatar}|${node.id === stateRef.userId ? 'self' : 'other'}|${(node.name || '').charAt(0).toUpperCase()}`;
     if (!textureCache.has(cacheKey)) {
-        const size = 64;
+        const size = 512;
         const canvas = document.createElement('canvas');
         canvas.width = size;
         canvas.height = size;
         const ctx = canvas.getContext('2d');
-        const isCurrentUser = node.id === stateRef.userId;
         const texture = new THREE.CanvasTexture(canvas);
 
         const draw = (img = null) => {
             ctx.clearRect(0,0,size,size);
 
-            ctx.beginPath();
-            ctx.arc(size/2, size/2, size/2, 0, 2 * Math.PI);
-            ctx.fillStyle = isCurrentUser ? '#ffffff' : '#1e293b';
-            ctx.fill();
-
             if(img) {
                 ctx.save();
                 ctx.beginPath();
-                ctx.arc(size/2, size/2, size/2 - 2, 0, 2 * Math.PI);
+                ctx.arc(size/2, size/2, size/2, 0, 2 * Math.PI);
                 ctx.clip();
                 ctx.drawImage(img, 0, 0, size, size);
                 ctx.restore();
             } else {
                 ctx.fillStyle = 'white';
-                ctx.font = '30px Arial';
+                ctx.font = 'bold 240px "Orbitron", sans-serif';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillText((node.name || '').charAt(0).toUpperCase(), size/2, size/2);
             }
 
-            ctx.beginPath();
-            ctx.arc(size/2, size/2, size/2 - 2, 0, 2 * Math.PI);
-            ctx.lineWidth = 4;
-            ctx.strokeStyle = isCurrentUser ? '#6366f1' : '#475569';
-            ctx.stroke();
-
             texture.needsUpdate = true;
+            texture.minFilter = THREE.LinearMipmapLinearFilter;
+            texture.magFilter = THREE.LinearFilter;
         };
 
         const img = new Image();
@@ -384,8 +374,10 @@ function nodeRenderer(node) {
 
     const nameSprite = new SpriteText(node.name);
     nameSprite.color = 'white';
-    nameSprite.textHeight = 4;
-    nameSprite.position.y = -12;
+    nameSprite.fontFace = '"Orbitron", "Noto Sans SC", sans-serif';
+    nameSprite.textHeight = 5;
+    nameSprite.backgroundColor = 'rgba(0,0,0,0)';
+    nameSprite.position.y = -22;
     group.add(nameSprite);
 
     return group;
