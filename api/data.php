@@ -1,16 +1,24 @@
 <?php
 // api/data.php
 require_once '../config/db.php';
+require_once '../config/auth.php';
 
 header('Content-Type: application/json');
 
-if (!isset($_SESSION["user_id"])) {
-    http_response_code(401);
-    echo json_encode(['error' => 'Unauthorized']);
-    exit;
-}
+require_login();
 
 $current_user_id = $_SESSION["user_id"];
+$lastUpdateParam = $_GET['last_update'] ?? null;
+$lastUpdateTime = null;
+
+if ($lastUpdateParam) {
+    $parsedTime = strtotime($lastUpdateParam);
+    if ($parsedTime !== false) {
+        $lastUpdateTime = date('Y-m-d H:i:s', $parsedTime);
+    }
+}
+
+$isIncremental = !empty($lastUpdateTime);
 session_write_close(); // Unblock session
 
 try {
@@ -57,11 +65,29 @@ try {
 
     // --- Full Data Fetch (Only if Changed) ---
 
-    // 1. Get all nodes
-    $nodes = $pdo->query('SELECT id, username, real_name, avatar, signature FROM users')->fetchAll();
+    // 1. Get nodes (incremental if last_update provided)
+    if ($isIncremental) {
+        $stmt = $pdo->prepare('SELECT id, username, real_name, avatar, signature FROM users WHERE updated_at > ?');
+        $stmt->execute([$lastUpdateTime]);
+        $nodes = $stmt->fetchAll();
+    } else {
+        $nodes = $pdo->query('SELECT id, username, real_name, avatar, signature FROM users')->fetchAll();
+    }
 
-    // 2. Get all relationships
-    $edges = $pdo->query('SELECT from_id, to_id, type FROM relationships')->fetchAll();
+    // 2. Get relationships (incremental if last_update provided)
+    if ($isIncremental) {
+        $stmt = $pdo->prepare('SELECT from_id, to_id, type FROM relationships WHERE updated_at > ?');
+        $stmt->execute([$lastUpdateTime]);
+        $edges = $stmt->fetchAll();
+    } else {
+        $edges = $pdo->query('SELECT from_id, to_id, type FROM relationships')->fetchAll();
+    }
+
+    if ($isIncremental && count($nodes) === 0 && count($edges) === 0 && $lastUpdateTime && $graphState && $graphState > $lastUpdateTime) {
+        $nodes = $pdo->query('SELECT id, username, real_name, avatar, signature FROM users')->fetchAll();
+        $edges = $pdo->query('SELECT from_id, to_id, type FROM relationships')->fetchAll();
+        $isIncremental = false;
+    }
 
     // 3. Get pending requests
     $stmt = $pdo->prepare('
@@ -114,8 +140,11 @@ try {
     echo json_encode([
         'nodes' => $formattedNodes,
         'links' => $formattedEdges,
+        'last_messages' => $lastMessages,
         'requests' => $requests,
-        'current_user_id' => (int)$current_user_id
+        'current_user_id' => (int)$current_user_id,
+        'last_update' => $graphState,
+        'incremental' => $isIncremental
     ]);
 
 } catch (Exception $e) {

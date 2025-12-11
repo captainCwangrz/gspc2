@@ -78,7 +78,8 @@ class Database {
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (from_id) REFERENCES users(id) ON DELETE CASCADE,
                     FOREIGN KEY (to_id) REFERENCES users(id) ON DELETE CASCADE,
-                    INDEX idx_msg_pagination (from_id, to_id, id)
+                    INDEX idx_timestamp (timestamp),
+                    INDEX idx_chat_history (from_id, to_id, id)
                 ) ENGINE=InnoDB;
 
                 CREATE TABLE IF NOT EXISTS read_receipts (

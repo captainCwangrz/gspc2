@@ -1,6 +1,14 @@
 <?php
 // gspc2/logout.php
-// 不需要引用数据库，直接销毁 session 即可
+require_once __DIR__ . '/config/csrf.php';
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    exit('Method Not Allowed');
+}
+
+checkCsrf();
+
 session_start();
 $_SESSION = [];
 

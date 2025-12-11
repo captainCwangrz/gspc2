@@ -1,10 +1,7 @@
-/**
- * Gossip Chain 3D - Main Application Logic
- * refactored for gspc2
- */
+import { fetchGraphData, syncReadReceipts } from './api.js';
+import { createGraph, animateGraph, initStarfieldBackground } from './graph.js';
+import { initUI, updateRequestsUI, updateUnreadMessagesUI, showToast, escapeHtml } from './ui.js';
 
-// --- Configuration ---
-// Use config injected from backend if available, else fallback
 const CONFIG = {
     pollInterval: 3000,
     relStyles: window.APP_CONFIG && window.APP_CONFIG.RELATION_STYLES ? window.APP_CONFIG.RELATION_STYLES : {
@@ -19,53 +16,7 @@ const CONFIG = {
 
 const RELATION_TYPES = window.APP_CONFIG && window.APP_CONFIG.RELATION_TYPES ? window.APP_CONFIG.RELATION_TYPES : ['DATING', 'BEST_FRIEND', 'BROTHER', 'SISTER', 'BEEFING', 'CRUSH'];
 
-// Shared star/particle shader controls
-// Faster + deeper twinkles so the effect is visible on both the background and beam particles
-const STAR_TWINKLE_SPEED = 2.8; // ~2.2s full cycle for a clear pulse
-const STAR_TWINKLE_AMPLITUDE = 0.9; // Stronger brightening while keeping highlights controlled
-const CLOCK_START = performance.now() * 0.001; // Keep shader time values small to preserve precision
-
-function buildStarVertexShader() {
-    return `
-        uniform float uTime;
-        attribute vec3 starColor;
-        attribute float size;
-        attribute float phase;
-        varying vec3 vColor;
-        varying float vOpacity;
-        void main() {
-            vColor = starColor;
-            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-            gl_Position = projectionMatrix * mvPosition;
-            gl_PointSize = max(1.35, size * (1000.0 / -mvPosition.z));
-            float t = 0.5 + 0.5 * sin(uTime * ${STAR_TWINKLE_SPEED} + phase);
-            float eased = t * t * (3.0 - 2.0 * t); // Smoothstep-like easing to avoid hard swings
-            float sizeFactor = clamp((size - 3.0) / 24.0, 0.0, 1.0); // Let dust participate in twinkle more
-            float sizeEase = pow(sizeFactor, 1.05);
-            float scaledAmplitude = ${STAR_TWINKLE_AMPLITUDE} * mix(0.55, 1.08, sizeEase);
-            vOpacity = 0.78 + scaledAmplitude * eased;
-        }
-    `;
-}
-
-const STAR_FRAGMENT_SHADER = `
-    varying vec3 vColor;
-    varying float vOpacity;
-    void main() {
-        vec2 xy = gl_PointCoord.xy - vec2(0.5);
-        float dist = length(xy);
-        float core = smoothstep(0.1, 0.0, dist);
-        float halo = smoothstep(0.5, 0.0, dist) * 0.4;
-        float alpha = (core + halo);
-        if (alpha < 0.01) discard;
-        vec3 boosted = (vColor + vec3(0.12, 0.12, 0.24) * (halo * 2.0)) * (1.12 + halo * 0.12);
-        vec3 finalColor = boosted * vOpacity;
-        gl_FragColor = vec4(finalColor, alpha * vOpacity);
-    }
-`;
-
-// --- Global State ---
-const State = {
+export const State = {
     userId: null,
     graphData: { nodes: [], links: [] },
     reqHash: "",
@@ -73,534 +24,162 @@ const State = {
     highlightLinks: new Set(),
     highlightLink: null,
     isFirstLoad: true,
-    etag: null, // Store ETag for caching
-    activeChats: new Set() // Track active chat userIds
+    etag: null,
+    activeChats: new Set(),
+    lastUpdate: null
 };
 
-// Graph Instance
 let Graph = null;
+let pollTimer = null;
 
-/**
- * Initialize the Application
- * Called from dashboard.php
- */
-function initApp(userId) {
+export function initApp(userId) {
     State.userId = userId;
     const elem = document.getElementById('3d-graph');
 
-    // Initialize 3D Force Graph
-    Graph = ForceGraph3D()(elem)
-        .backgroundColor('#050505')
-        .showNavInfo(false)
-        .nodeLabel('name')
-        .nodeThreeObject(nodeRenderer)
-        .linkWidth(link => link === State.highlightLink ? 2 : 1) // Keep interactable width
-        .linkColor(() => 'rgba(0,0,0,0)') // Transparent to hide solid line (beam only)
-        .linkDirectionalParticles(0)
-        .linkThreeObjectExtend(true)
-        .linkThreeObject(linkRenderer)
-        .linkPositionUpdate((group, { start, end }) => {
-            const middlePos = Object.assign(...['x', 'y', 'z'].map(c => ({
-                [c]: start[c] + (end[c] - start[c]) / 2
-            })));
-            Object.assign(group.position, middlePos);
-
-            if (group.children) {
-                const dustContainer = group.children.find(c => c.name === 'dust-container');
-                if (dustContainer) {
-                    const vStart = new THREE.Vector3(start.x, start.y, start.z);
-                    const vEnd = new THREE.Vector3(end.x, end.y, end.z);
-                    const dist = vStart.distanceTo(vEnd);
-                    const dir = vEnd.clone().sub(vStart).normalize();
-
-                    dustContainer.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), dir);
-                    dustContainer.scale.set(1, 1, dist);
-                }
-            }
-        })
-        .onNodeClick(handleNodeClick)
-        .onLinkClick(handleLinkClick)
-        .onBackgroundClick(resetFocus)
-        // Pin node on drag end
-        .onNodeDragEnd(node => {
-            node.fx = node.x;
-            node.fy = node.y;
-            node.fz = node.z;
-        });
-
-    const renderer = Graph.renderer && Graph.renderer();
-    if (renderer) {
-        renderer.useLegacyLights = false;
-    }
-
-    // Tune Physics Forces
-    Graph.d3Force('charge').strength(-400); // Stronger repulsion (default ~ -30)
-    Graph.d3Force('link').distance(120);    // Longer links (default ~ 30)
-
-    // Zoom Controls
-    const controls = Graph.controls();
-    if (controls) {
-        controls.minDistance = 50;
-        controls.maxDistance = 2000;
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.1;
-    }
-
-    // Initialize Search Listener
-    document.getElementById('search-input').addEventListener('input', handleSearch);
-
-    // Initialize Signature Update Listener
-    document.getElementById('signature-update-btn').addEventListener('click', updateSignature);
-    const sigInput = document.getElementById('signature-input');
-    if (sigInput) {
-        sigInput.addEventListener('input', (e) => {
-            const len = e.target.value.length;
-            document.getElementById('signature-counter').innerText = `${len} / 160`;
-        });
-    }
-
-    // Zoom to Me Button
-    const zoomBtn = document.getElementById('zoom-btn');
-    if (zoomBtn) {
-        zoomBtn.addEventListener('click', () => {
-            const myNode = State.graphData.nodes.find(n => n.id === State.userId);
-            if (myNode) handleNodeClick(myNode);
-        });
-    }
-
-    // Start Loops
-    syncReadReceipts().then(() => {
-        async function poll() {
-            try {
-                await fetchData();
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setTimeout(poll, CONFIG.pollInterval);
-            }
-        }
-        poll();
+    Graph = createGraph({
+        state: State,
+        config: CONFIG,
+        element: elem,
+        onNodeClick: handleNodeClick,
+        onLinkClick: handleLinkClick,
+        onBackgroundClick: resetFocus
     });
 
-    // Start Visual Loops
+    window.handleNodeClick = handleNodeClick;
+
+    initUI({ state: State, config: CONFIG, relationTypes: RELATION_TYPES, refreshData: loadGraphData });
+
+    hydrateReadReceipts();
+    loadGraphData();
+
     initStarfieldBackground();
-    animateLoop();
+    animateGraph();
 }
 
-/**
- * Global Animation Loop (for Halo and Background)
- */
-function animateLoop() {
-    // Animate Halo
-    const time = Date.now() * 0.0015; // Speed
-    const elapsed = (performance.now() * 0.001) - CLOCK_START; // Stable time base for shader uniforms
-    // Breathing: Opacity between 0.3 and 0.6
-    const opacity = 0.45 + Math.sin(time) * 0.15;
-    // Slight scale breathing: 1.0 to 1.1 relative to base scale
-    const scaleMod = 1.0 + Math.sin(time) * 0.05;
-
-    State.graphData.nodes.forEach(n => {
-        if(n.haloSprite) {
-             n.haloSprite.material.opacity = opacity;
-             n.haloSprite.scale.set(60 * scaleMod, 60 * scaleMod, 1);
-        }
-    });
-
-    // Animate Dust
-    State.graphData.links.forEach(link => {
-        if(link.__dust) {
-            link.__dust.rotation.z += 0.005;
-            if (link.__dustMat && link.__dustMat.uniforms && link.__dustMat.uniforms.uTime) {
-                link.__dustMat.uniforms.uTime.value = elapsed;
+async function hydrateReadReceipts() {
+    const data = await syncReadReceipts();
+    if (data.success && data.receipts) {
+        data.receipts.forEach(r => {
+            const key = `read_msg_id_${State.userId}_${r.peer_id}`;
+            const localVal = parseInt(localStorage.getItem(key) || '0');
+            if (r.last_read_msg_id > localVal) {
+                localStorage.setItem(key, r.last_read_msg_id);
             }
-        }
-    });
+        });
+    }
+}
 
-    // Animate Background (Rotate the starfield slowly and twinkle)
-    if (Graph) {
-         const scene = Graph.scene();
-         const bg = scene.getObjectByName('starfield-bg');
-         if (bg) {
-             // Keep the background fixed; rotating the far field caused sub-pixel
-             // jitter that made the tiniest stars appear to flicker even when
-             // twinkle amplitudes were reduced.
-             const stars = bg.children[0];
-             if(stars && stars.material.uniforms) {
-                 stars.material.uniforms.uTime.value = elapsed;
-             }
-         }
+async function loadGraphData() {
+    try {
+        const response = await fetchGraphData({ etag: State.etag, lastUpdate: State.lastUpdate });
+        if (response.status === 304 || !response.data) {
+            scheduleNextPoll();
+            return;
+        }
+
+        if (response.etag) State.etag = response.etag;
+        applyGraphPayload(response.data);
+    } catch (e) {
+        console.error('Polling error:', e);
+    } finally {
+        scheduleNextPoll();
+    }
+}
+
+function scheduleNextPoll() {
+    if (pollTimer) clearTimeout(pollTimer);
+    pollTimer = setTimeout(loadGraphData, CONFIG.pollInterval);
+}
+
+function applyGraphPayload(data) {
+    const incomingNodes = data.nodes || [];
+    const incomingLinks = data.links || [];
+
+    mergeGraphData(incomingNodes, incomingLinks, data.incremental);
+    applyLastMessages(data.last_messages || {});
+
+    updateRequestsUI(data.requests || []);
+    updateUnreadMessagesUI(State.graphData.nodes);
+
+    Graph.graphData(State.graphData);
+
+    const me = State.graphData.nodes.find(n => n.id === State.userId);
+    if (me) {
+        if (State.isFirstLoad) document.getElementById('my-avatar').src = me.avatar;
+        const sigEl = document.getElementById('my-signature');
+        if (sigEl) sigEl.textContent = me.signature || "No signature set.";
     }
 
-    requestAnimationFrame(animateLoop);
+    if(State.isFirstLoad) {
+        const loader = document.getElementById('loader');
+        if(loader) {
+            loader.style.opacity = '0';
+            setTimeout(() => loader.style.display = 'none', 500);
+        }
+        State.isFirstLoad = false;
+    }
+
+    const nodeDisplay = document.getElementById('node-count-display');
+    if (nodeDisplay) nodeDisplay.innerText = `${State.graphData.nodes.length} Nodes`;
+
+    State.lastUpdate = data.last_update || State.lastUpdate;
 }
 
-/**
- * Hydrate Local Storage with Read Receipts from Server
- */
-async function syncReadReceipts() {
-    try {
-        const res = await fetch('api/messages.php?action=sync_read_receipts');
-        const data = await res.json();
-        if (data.success && data.receipts) {
-            data.receipts.forEach(r => {
-                const key = `read_msg_id_${State.userId}_${r.peer_id}`;
-                // Only overwrite if server has a higher value (or if local is missing)
-                const localVal = parseInt(localStorage.getItem(key) || '0');
-                if (r.last_read_msg_id > localVal) {
-                    localStorage.setItem(key, r.last_read_msg_id);
-                }
+function mergeGraphData(nodes, links, incremental = false) {
+    const existingPositions = new Map();
+    State.graphData.nodes.forEach(n => {
+        if (n.x !== undefined) {
+            existingPositions.set(n.id, {
+                x:n.x, y:n.y, z:n.z,
+                vx:n.vx, vy:n.vy, vz:n.vz,
+                fx: n.fx, fy: n.fy, fz: n.fz
             });
         }
-    } catch (e) {
-        console.error("Hydration failed:", e);
-    }
-}
-
-// --- Space Dust Effect Helpers ---
-
-function createSpaceDust(color) {
-    const particleCount = 180;
-    const geo = new THREE.BufferGeometry();
-    const pos = [];
-    const colors = [];
-    const sizes = [];
-    const phases = [];
-
-    // Base color with slight variation per particle
-    const base = new THREE.Color(color);
-
-    // Cylindrical cloud along Z-axis (-0.5 to 0.5)
-    for(let i=0; i<particleCount; i++) {
-        const r = 3 * Math.sqrt(Math.random()); // Radius spread
-        const theta = Math.random() * Math.PI * 2;
-        const x = r * Math.cos(theta);
-        const y = r * Math.sin(theta);
-        const z = (Math.random() - 0.5); // Spread along length
-
-        pos.push(x, y, z);
-
-        const c = base.clone();
-        const hsl = {};
-        c.getHSL(hsl);
-        hsl.s = Math.min(1.0, hsl.s * (1.05 + Math.random() * 0.35));
-        hsl.l = Math.min(1.0, hsl.l * (0.98 + Math.random() * 0.18));
-        const varied = new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l);
-        colors.push(varied.r, varied.g, varied.b);
-
-        const rand = Math.random();
-        const sizeBias = Math.pow(rand, 1.8);
-        sizes.push(1.0 + sizeBias * 3.0); // Slightly varied sizes
-
-        phases.push(Math.random() * Math.PI * 2);
-    }
-
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    geo.setAttribute('starColor', new THREE.Float32BufferAttribute(colors, 3));
-    geo.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
-    geo.setAttribute('phase', new THREE.Float32BufferAttribute(phases, 1));
-
-    const mat = new THREE.ShaderMaterial({
-        uniforms: {
-            uTime: { value: 0 }
-        },
-        vertexShader: buildStarVertexShader(),
-        fragmentShader: STAR_FRAGMENT_SHADER,
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending
     });
 
-    const points = new THREE.Points(geo, mat);
-    points.name = 'dust-points';
+    const nodeMap = new Map((incremental && !State.isFirstLoad) ? State.graphData.nodes.map(n => [n.id, n]) : []);
+    nodes.forEach(n => {
+        const previous = nodeMap.get(n.id) || {};
+        const merged = { ...previous, ...n };
+        const oldPos = existingPositions.get(n.id);
+        if (oldPos) Object.assign(merged, oldPos);
+        nodeMap.set(n.id, merged);
+    });
 
-    return points;
-}
+    if (!incremental || State.isFirstLoad) {
+        State.graphData.nodes = Array.from(nodeMap.values());
+    } else {
+        State.graphData.nodes = Array.from(nodeMap.values());
+    }
 
-/**
- * Custom Node Renderer (Canvas Sprite + Halo for Self)
- */
-function nodeRenderer(node) {
-    const size = 64;
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
-
-    const draw = (img) => {
-        ctx.clearRect(0,0,size,size);
-
-        // Background circle
-        ctx.beginPath();
-        ctx.arc(size/2, size/2, size/2, 0, 2 * Math.PI);
-        ctx.fillStyle = node.id === State.userId ? '#ffffff' : '#1e293b';
-        ctx.fill();
-
-        if(img) {
-            // Avatar image
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(size/2, size/2, size/2 - 2, 0, 2 * Math.PI);
-            ctx.clip();
-            ctx.drawImage(img, 0, 0, size, size);
-            ctx.restore();
-        } else {
-            // Text fallback
-            ctx.fillStyle = 'white';
-            ctx.font = '30px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(node.name.charAt(0).toUpperCase(), size/2, size/2);
-        }
-
-        // Border ring
-        ctx.beginPath();
-        ctx.arc(size/2, size/2, size/2 - 2, 0, 2 * Math.PI);
-        ctx.lineWidth = 4;
-        ctx.strokeStyle = node.id === State.userId ? '#6366f1' : '#475569';
-        ctx.stroke();
+    const linkKey = (l) => {
+        const s = typeof l.source === 'object' ? l.source.id : l.source;
+        const t = typeof l.target === 'object' ? l.target.id : l.target;
+        return `${s}-${t}`;
     };
 
-    // Clean up previous texture if it exists
-    if (node.texture) {
-        node.texture.dispose();
-    }
+    const linkMap = new Map((incremental && !State.isFirstLoad) ? State.graphData.links.map(l => [linkKey(l), l]) : []);
+    links.forEach(l => {
+        const existing = linkMap.get(linkKey(l)) || {};
+        linkMap.set(linkKey(l), { ...existing, ...l });
+    });
 
-    const texture = new THREE.CanvasTexture(canvas);
-    const material = new THREE.SpriteMaterial({ map: texture });
-    const sprite = new THREE.Sprite(material);
-    sprite.scale.set(16, 16, 1);
-    // Ensure avatar renders on top of halo if they fight
-    sprite.renderOrder = 10;
-
-    const img = new Image();
-    img.crossOrigin = "Anonymous";
-    img.src = node.avatar;
-    img.onload = () => { draw(img); texture.needsUpdate = true; };
-    img.onerror = () => { draw(null); texture.needsUpdate = true; };
-
-    node.draw = draw;
-    node.texture = texture;
-    node.img = img;
-    node.dispose = () => {
-        if(node.texture) node.texture.dispose();
-        if(node.material) node.material.dispose();
-        if(node.haloTexture) node.haloTexture.dispose();
-        if(node.haloMaterial) node.haloMaterial.dispose();
-    };
-
-    // Use a group for everything
-    const group = new THREE.Group();
-
-    // Strategy C: The Halo (Billboarded Glow Sprite)
-    if (node.id === State.userId) {
-        // 1. The Halo (Behind)
-        const haloCanvas = document.createElement('canvas');
-        haloCanvas.width = 64;
-        haloCanvas.height = 64;
-        const hCtx = haloCanvas.getContext('2d');
-
-        // Soft gradient glow
-        const grad = hCtx.createRadialGradient(32,32,0,32,32,32);
-        grad.addColorStop(0, 'rgba(139, 92, 246, 0.8)'); // Violet center
-        grad.addColorStop(0.5, 'rgba(139, 92, 246, 0.3)');
-        grad.addColorStop(1, 'rgba(139, 92, 246, 0)'); // Fade out
-
-        hCtx.fillStyle = grad;
-        hCtx.fillRect(0,0,64,64);
-
-        const haloTex = new THREE.CanvasTexture(haloCanvas);
-        const haloMat = new THREE.SpriteMaterial({
-            map: haloTex,
-            transparent: true,
-            opacity: 0.5,
-            depthWrite: false // Don't block other objects
-        });
-        const haloSprite = new THREE.Sprite(haloMat);
-
-        // Set initial scale (will be animated)
-        haloSprite.scale.set(50, 50, 1);
-        haloSprite.renderOrder = 1;
-
-        group.add(haloSprite);
-
-        node.haloSprite = haloSprite;
-        node.haloTexture = haloTex;
-        node.haloMaterial = haloMat;
-    }
-
-    // Add avatar sprite
-    group.add(sprite);
-
-    // Add Name Text Sprite
-    const nameSprite = new SpriteText(node.name);
-    nameSprite.color = 'white';
-    nameSprite.textHeight = 4;
-    nameSprite.position.y = -12; // Position below the node
-    group.add(nameSprite);
-
-    return group;
+    State.graphData.links = Array.from(linkMap.values());
 }
 
-/**
- * Custom Link Renderer (Dust + Label)
- */
-function linkRenderer(link) {
-    const group = new THREE.Group();
-    const style = CONFIG.relStyles[link.type];
-
-    // 1. Dust Effect
-    if (style && style.particle) {
-        const dust = createSpaceDust(style.color);
-
-        // Wrap dust in a container to separate alignment (container) from rotation (dust)
-        const dustContainer = new THREE.Group();
-        dustContainer.name = 'dust-container';
-        dustContainer.add(dust);
-        group.add(dustContainer);
-
-        link.__dust = dust; // Store ref for animation (spin)
-        link.__dustMat = dust.material; // For time-based twinkle updates
-    }
-
-    // 2. Label
-    const sprite = new SpriteText(style ? style.label : link.type);
-    sprite.color = style ? style.color : 'lightgrey';
-    sprite.textHeight = 3;
-    sprite.backgroundColor = 'rgba(0,0,0,0)';
-    sprite.padding = 2;
-    // Disable depth write so the transparent background doesn't block objects behind it
-    if(sprite.material) sprite.material.depthWrite = false;
-    group.add(sprite);
-
-    return group;
-}
-
-/**
- * Data Fetching Loop
- */
-async function fetchData() {
-    try {
-        const headers = {};
-        if (State.etag) {
-            headers['If-None-Match'] = State.etag;
+function applyLastMessages(lastMessages) {
+    State.graphData.nodes.forEach(node => {
+        const keyName = String(node.id);
+        if (Object.prototype.hasOwnProperty.call(lastMessages, keyName)) {
+            node.last_msg_id = parseInt(lastMessages[keyName]);
         }
-
-        const res = await fetch('api/data.php', { headers });
-
-        if (res.status === 304) return;
-        if (!res.ok) return;
-
-        const etag = res.headers.get('ETag');
-        if (etag) State.etag = etag;
-
-        const data = await res.json();
-
-        updateRequestsUI(data.requests);
-
-        // --- Notification & Chat Logic ---
-        data.nodes.forEach(n => {
-            if (n.id === State.userId) return;
-
-            const lastMsgId = n.last_msg_id || 0;
-            const key = `read_msg_id_${State.userId}_${n.id}`;
-            const readId = parseInt(localStorage.getItem(key) || '0');
-
-            if (State.activeChats.has(n.id)) {
-                const chatWin = document.getElementById(`chat-${n.id}`);
-                if (chatWin) {
-                    const currentMax = parseInt(chatWin.getAttribute('data-last-id') || '0');
-                    if (lastMsgId > currentMax) {
-                        window.loadMsgs(n.id);
-                    }
-                }
-            }
-
-            if (lastMsgId > readId) {
-                const toastKey = `last_toasted_msg_${State.userId}_${n.id}`;
-                const lastToastedId = parseInt(sessionStorage.getItem(toastKey) || '0');
-                if (lastMsgId > lastToastedId) {
-                    if (!State.activeChats.has(n.id)) {
-                        showToast(
-                            `New message from ${n.name}`,
-                            'info',
-                            0,
-                            () => window.openChat(n.id, encodeURIComponent(n.name)),
-                            { userId: n.id }
-                        );
-                    }
-                    sessionStorage.setItem(toastKey, lastMsgId);
-                }
-            }
-            n.hasUnread = (lastMsgId > readId) && !State.activeChats.has(n.id);
-        });
-
-        updateUnreadMessagesUI(data.nodes);
-
-        // Check for updates to minimize graph re-renders
-        const currentNodesSimple = State.graphData.nodes.map(n => ({
-            id: n.id, name: n.name, avatar: n.avatar, signature: n.signature, val: n.val, hasUnread: n.hasUnread
-        }));
-
-        const newNodesSimple = data.nodes.map(n => ({
-            id: n.id, name: n.name, avatar: n.avatar, signature: n.signature, val: n.val, hasUnread: n.hasUnread
-        }));
-
-        const currentLinksSimple = State.graphData.links.map(l => ({
-            source: (typeof l.source === 'object' ? l.source.id : l.source),
-            target: (typeof l.target === 'object' ? l.target.id : l.target),
-            type: l.type
-        }));
-
-        if (State.isFirstLoad ||
-            JSON.stringify(currentNodesSimple) !== JSON.stringify(newNodesSimple) ||
-            JSON.stringify(currentLinksSimple) !== JSON.stringify(data.links)) {
-
-            if (!State.isFirstLoad) {
-                const oldPosMap = new Map();
-                State.graphData.nodes.forEach(n => {
-                    if (n.x !== undefined) {
-                        oldPosMap.set(n.id, {
-                            x:n.x, y:n.y, z:n.z,
-                            vx:n.vx, vy:n.vy, vz:n.vz,
-                            fx: n.fx, fy: n.fy, fz: n.fz
-                        });
-                    }
-                });
-                data.nodes.forEach(n => {
-                    const old = oldPosMap.get(n.id);
-                    if (old) Object.assign(n, old);
-                });
-            }
-
-            State.graphData = { nodes: data.nodes, links: data.links };
-            Graph.graphData(State.graphData);
-
-            const me = data.nodes.find(n => n.id === State.userId);
-            if (me) {
-                if (State.isFirstLoad) document.getElementById('my-avatar').src = me.avatar;
-                const sigEl = document.getElementById('my-signature');
-                if (sigEl) sigEl.textContent = me.signature || "No signature set.";
-            }
-
-            if(State.isFirstLoad) {
-                const loader = document.getElementById('loader');
-                if(loader) {
-                    loader.style.opacity = '0';
-                    setTimeout(() => loader.style.display = 'none', 500);
-                }
-                State.isFirstLoad = false;
-            }
-
-            document.getElementById('node-count-display').innerText = `${data.nodes.length} Nodes`;
-        }
-    } catch (e) {
-        console.error("Polling error:", e);
-    }
+        const lastId = node.last_msg_id || 0;
+        const key = `read_msg_id_${State.userId}_${node.id}`;
+        const readId = parseInt(localStorage.getItem(key) || '0');
+        node.hasUnread = lastId > readId && !State.activeChats.has(node.id);
+    });
 }
 
-/**
- * Interaction Handlers
- */
 function handleNodeClick(node) {
     const dist = 150;
     const v = new THREE.Vector3(node.x, node.y, node.z || 0);
@@ -664,9 +243,6 @@ function resetFocus() {
     document.getElementById('inspector-panel').style.display = 'none';
 }
 
-/**
- * UI Generators
- */
 function showNodeInspector(node) {
     const panel = document.getElementById('inspector-panel');
     const dataDiv = document.getElementById('inspector-data');
@@ -766,502 +342,4 @@ function showLinkInspector(link) {
     `;
 }
 
-function updateHudVisibility() {
-    const hud = document.getElementById('notif-hud');
-    const toastList = document.getElementById('toast-list');
-    const reqList = document.getElementById('requests-container');
-    const unreadList = document.getElementById('unread-msgs-container');
-
-    const hasToasts = toastList.children.length > 0;
-    const hasReqs = reqList.style.display !== 'none';
-    const hasUnreads = unreadList.style.display !== 'none';
-
-    if (hasToasts || hasReqs || hasUnreads) {
-        hud.style.display = 'block';
-    } else {
-        hud.style.display = 'none';
-    }
-}
-
-function updateRequestsUI(requests) {
-    const container = document.getElementById('requests-container');
-    const list = document.getElementById('req-list');
-
-    const reqHash = JSON.stringify(requests);
-    if(reqHash === State.reqHash) return;
-    State.reqHash = reqHash;
-
-    if(!requests || requests.length === 0) {
-        container.style.display = 'none';
-        updateHudVisibility();
-        return;
-    }
-
-    container.style.display = 'block';
-    list.innerHTML = requests.map(r => `
-        <div class="req-item" style="background:rgba(255,255,255,0.05); padding:8px; margin-bottom:8px; border-radius:6px; font-size:0.9em;">
-            <strong>${escapeHtml(r.username)}</strong> &rarr; ${r.type}
-            <div class="btn-group" style="margin-top:6px; display:flex; gap:8px;">
-                <button class="btn btn-accept" style="background:#10b981; color:white; border:none; padding:4px 12px; border-radius:4px; cursor:pointer;" onclick="window.acceptReq(${r.id})">Accept</button>
-                <button class="btn btn-reject" style="background:#ef4444; color:white; border:none; padding:4px 12px; border-radius:4px; cursor:pointer;" onclick="window.rejectReq(${r.id})">Deny</button>
-            </div>
-        </div>
-    `).join('');
-    updateHudVisibility();
-}
-
-function updateUnreadMessagesUI(nodes) {
-    const container = document.getElementById('unread-msgs-container');
-    const list = document.getElementById('unread-msgs-list');
-    const unreadNodes = nodes.filter(n => n.hasUnread && n.id !== State.userId);
-
-    if (unreadNodes.length === 0) {
-        container.style.display = 'none';
-        updateHudVisibility();
-        return;
-    }
-
-    container.style.display = 'block';
-    list.innerHTML = unreadNodes.map(n => `
-        <div class="unread-item toast info show" onclick="window.openChat(${n.id}, '${encodeURIComponent(n.name)}')" style="cursor:pointer; position: relative; transform: none; margin-bottom: 8px;">
-            New message from <strong>${escapeHtml(n.name)}</strong>
-        </div>
-    `).join('');
-    updateHudVisibility();
-}
-
-function handleSearch(e) {
-    const searchTerm = e.target.value.toLowerCase();
-    const resultsContainer = document.getElementById('search-results');
-    if (!searchTerm) {
-        resultsContainer.innerHTML = '';
-        resultsContainer.style.display = 'none';
-        return;
-    }
-
-    const hits = State.graphData.nodes.filter(n =>
-        n.name.toLowerCase().includes(searchTerm) ||
-        String(n.id) === searchTerm ||
-        (n.username && n.username.toLowerCase().includes(searchTerm))
-    );
-
-    if (hits.length === 0) {
-        resultsContainer.innerHTML = '<div class="search-result-item">No users found.</div>';
-    } else {
-        resultsContainer.innerHTML = hits.map(n => `
-            <div class="search-result-item" onclick="handleNodeClick(State.graphData.nodes.find(user => user.id === ${n.id})); document.getElementById('search-input').value=''; handleSearch({target:{value:''}});">
-                ${escapeHtml(n.name)}
-            </div>
-        `).join('');
-    }
-    resultsContainer.style.display = 'block';
-}
-
-function updateSignature() {
-    const newSignature = document.getElementById('signature-input').value;
-    if (!newSignature) {
-        showToast("Signature cannot be empty.", "error");
-        return;
-    }
-
-    postData('api/profile.php', { signature: newSignature })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                showToast("Signature updated!");
-                document.getElementById('signature-input').value = '';
-                const counter = document.getElementById('signature-counter');
-                if (counter) counter.innerText = '0 / 160';
-                fetchData();
-            } else {
-                showToast("Error: " + data.error, "error");
-            }
-        });
-}
-
-function showToast(message, type = 'success', duration = 3000, onClick = null, dataAttrs = {}) {
-    const container = document.getElementById('toast-list');
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.textContent = message;
-    
-    toast.style.position = 'relative';
-    toast.style.transform = 'none';
-    toast.style.marginBottom = '8px';
-
-    for (const [key, value] of Object.entries(dataAttrs)) {
-        toast.dataset[key] = value;
-    }
-
-    toast.onclick = () => {
-        if (onClick) onClick();
-
-        toast.classList.remove('show');
-        setTimeout(() => {
-            if (toast.parentElement) container.removeChild(toast);
-            updateHudVisibility();
-        }, 300);
-    };
-
-    container.appendChild(toast);
-    updateHudVisibility();
-
-    setTimeout(() => {
-        toast.classList.add('show');
-    }, 100);
-
-    if (duration > 0) {
-        setTimeout(() => {
-            if (toast.parentElement) {
-                toast.classList.remove('show');
-                setTimeout(() => {
-                    if (toast.parentElement) container.removeChild(toast);
-                    updateHudVisibility();
-                }, 300);
-            }
-        }, duration);
-    }
-}
-
-/**
- * Strategy A: High Quality Starfield (Rolls Royce Style)
- */
-function initStarfieldBackground() {
-    setTimeout(() => {
-        if(!Graph) return;
-
-        // Fix camera far clipping to see distant stars
-        const camera = Graph.camera();
-        if(camera) {
-            camera.far = 20000;
-            camera.updateProjectionMatrix();
-        }
-
-        const scene = Graph.scene();
-
-        // Remove old if exists
-        const old = scene.getObjectByName('starfield-bg');
-        if(old) scene.remove(old);
-
-        const group = new THREE.Group();
-        group.name = 'starfield-bg';
-
-        const starCount = 7000;
-        const geo = new THREE.BufferGeometry();
-
-        const pos = [];
-        const colors = [];
-        const sizes = [];
-        const phases = [];
-
-        // Refined Palette (Subtle variety, high saturation)
-        const colorPalette = [
-            new THREE.Color('#a9c6ff'), // Crisp Blue
-            new THREE.Color('#c8d6ff'), // Soft Blue-White
-            new THREE.Color('#f0f3ff'), // Gentle Mist (replaces pure white)
-            new THREE.Color('#f9eddc'), // Warm White
-            new THREE.Color('#ffd7b0'), // Soft Gold
-            new THREE.Color('#f5c4c4')  // Faint Rose (Variety)
-        ];
-
-        for(let i=0; i<starCount; i++) {
-            // Random position in a large sphere
-            const r = 3000 + Math.random() * 6000;
-            const theta = 2 * Math.PI * Math.random();
-            const phi = Math.acos(2 * Math.random() - 1);
-
-            const x = r * Math.sin(phi) * Math.cos(theta);
-            const y = r * Math.sin(phi) * Math.sin(theta);
-            const z = r * Math.cos(phi);
-
-            pos.push(x, y, z);
-
-            // Color
-            const c = colorPalette[Math.floor(Math.random() * colorPalette.length)];
-            // Add slight randomness to saturation/brightness
-            const hsl = {};
-            c.getHSL(hsl);
-            // subtle shift
-            hsl.s = Math.min(1.0, hsl.s * (1.05 + Math.random() * 0.25));
-            hsl.l = Math.min(1.0, hsl.l * (0.92 + Math.random() * 0.12));
-            const c2 = new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l);
-            colors.push(c2.r, c2.g, c2.b);
-
-            // Size Distribution: Shift toward larger stars
-            // Base range: slightly larger for brighter impressions
-            const rand = Math.random();
-            const sizeBias = Math.pow(rand, 1.6);
-            let size = 12.0 + sizeBias * 27.0; // Range ~12.0 to ~39.0
-
-            // "Foreground" / Hero Stars: Slightly higher chance to be large/pronounced
-            // 5% chance to be a large "hero" star (Size 28-36)
-            if (Math.random() < 0.05) {
-                size = 34.0 + Math.random() * 12.0;
-            }
-
-            sizes.push(size);
-
-            // Twinkle phase
-            phases.push(Math.random() * Math.PI * 2);
-        }
-
-        geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-        geo.setAttribute('starColor', new THREE.Float32BufferAttribute(colors, 3));
-        geo.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
-        geo.setAttribute('phase', new THREE.Float32BufferAttribute(phases, 1));
-
-        const mat = new THREE.ShaderMaterial({
-            uniforms: {
-                uTime: { value: 0 }
-            },
-            vertexShader: buildStarVertexShader(),
-            fragmentShader: STAR_FRAGMENT_SHADER,
-            transparent: true,
-            depthWrite: false,
-            blending: THREE.AdditiveBlending
-        });
-
-        const stars = new THREE.Points(geo, mat);
-        group.add(stars);
-
-        scene.add(group);
-    }, 1000);
-}
-
-function escapeHtml(text) {
-    if (!text) return text;
-    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-}
-
-function postData(url, data) {
-    const fd = new FormData();
-    for(let k in data) fd.append(k, data[k]);
-
-    const meta = document.querySelector('meta[name="csrf-token"]');
-    if(meta) fd.append('csrf_token', meta.content);
-
-    return fetch(url, { method: 'POST', body: fd });
-}
-
-// --- Global Window Functions (Exposed for HTML Event Handlers) ---
-
-window.sendRequest = function(toId) {
-    const type = document.getElementById('req-type').value;
-    postData('api/relations.php', { action: 'request', to_id: toId, type: type })
-        .then(res => res.json())
-        .then(res => {
-            if(res.success) {
-                showToast('Request Sent!');
-                fetchData();
-            } else {
-                showToast(res.error || 'Failed to send request', 'error');
-            }
-        });
-};
-
-window.updateRel = function(toId) {
-    const type = document.getElementById('update-rel-type').value;
-    postData('api/relations.php', { action: 'update', to_id: toId, type: type })
-        .then(res => res.json())
-        .then(res => {
-            if(res.success) {
-                showToast('Relationship updated!');
-                fetchData();
-            } else {
-                showToast(res.error || 'Failed to update', 'error');
-            }
-        });
-};
-
-window.acceptReq = function(reqId) {
-    postData('api/relations.php', { action: 'accept_request', request_id: reqId }).then(fetchData);
-};
-
-window.rejectReq = function(reqId) {
-    postData('api/relations.php', { action: 'reject_request', request_id: reqId }).then(fetchData);
-};
-
-window.removeRel = function(toId) {
-    if(!confirm("Are you sure you want to remove this relationship?")) return;
-    postData('api/relations.php', { action: 'remove', to_id: toId }).then(fetchData);
-};
-
-window.openChat = function(userId, encodedName) {
-    const userName = decodeURIComponent(encodedName);
-    const chatHud = document.getElementById('chat-hud');
-    chatHud.style.pointerEvents = 'auto';
-
-    State.activeChats.add(userId);
-
-    const node = State.graphData.nodes.find(n => n.id === userId);
-    if(node) {
-        const lastId = node.last_msg_id;
-        localStorage.setItem(`read_msg_id_${State.userId}_${userId}`, lastId);
-
-        if (lastId > 0) {
-            postData('api/messages.php', {
-                action: 'mark_read',
-                peer_id: userId,
-                last_read_msg_id: lastId
-            });
-        }
-
-        node.hasUnread = false;
-        if(node.draw) {
-             node.draw(node.img);
-             node.texture.needsUpdate = true;
-        }
-        updateUnreadMessagesUI(State.graphData.nodes);
-    }
-
-    const toasts = document.querySelectorAll(`.toast[data-user-id="${userId}"]`);
-    toasts.forEach(t => {
-        t.classList.remove('show');
-        setTimeout(() => {
-            if (t.parentElement) t.parentElement.removeChild(t);
-            updateHudVisibility();
-        }, 300);
-    });
-
-    if(document.getElementById(`chat-${userId}`)) return;
-
-    const div = document.createElement('div');
-    div.id = `chat-${userId}`;
-    div.className = 'chat-window';
-    div.setAttribute('data-last-id', '0');
-    div.innerHTML = `
-        <div class="chat-header">
-            <span>${escapeHtml(userName)}</span>
-            <span style="cursor:pointer; color:#ef4444;" onclick="window.closeChat(${userId})">✕</span>
-        </div>
-        <div class="chat-msgs" id="msgs-${userId}">Loading...</div>
-        <form class="chat-input-area" onsubmit="window.sendMsg(event, ${userId})">
-            <input type="text" style="flex:1; background:none; border:none; color:white; outline:none;" placeholder="Message..." required>
-            <button style="background:none; border:none; color:#6366f1; cursor:pointer;">Send</button>
-        </form>
-    `;
-    chatHud.appendChild(div);
-
-    window.loadMsgs(userId);
-
-    const msgsContainer = document.getElementById(`msgs-${userId}`);
-    msgsContainer.addEventListener('scroll', () => {
-        if(msgsContainer.scrollTop === 0) {
-            const firstMsg = msgsContainer.firstElementChild;
-            if (firstMsg) {
-                const oldestId = parseInt(firstMsg.getAttribute('data-id'));
-                if (oldestId > 1) {
-                    window.loadMsgs(userId, oldestId);
-                }
-            }
-        }
-    });
-};
-
-window.closeChat = function(userId) {
-    const win = document.getElementById(`chat-${userId}`);
-    if(win) win.remove();
-    State.activeChats.delete(userId);
-
-    if(document.getElementById('chat-hud').children.length === 0) {
-        document.getElementById('chat-hud').style.pointerEvents = 'none';
-    }
-};
-
-window.loadMsgs = function(userId, beforeId = 0) {
-    const container = document.getElementById(`msgs-${userId}`);
-    if(!container) return;
-
-    const isPagination = beforeId > 0;
-
-    const url = `api/messages.php?action=retrieve&to_id=${userId}` + (isPagination ? `&before_id=${beforeId}` : '');
-
-    fetch(url)
-    .then(r => r.json())
-    .then(data => {
-        if(data.error) return;
-
-        if (data.length === 0 && isPagination) {
-             return;
-        }
-
-        const html = data.map(m => `
-            <div class="msg-row" data-id="${m.id}" style="text-align:${m.from_id == State.userId ? 'right' : 'left'}; margin-bottom:4px;">
-                <span style="background:${m.from_id == State.userId ? '#6366f1' : '#334155'}; padding:4px 8px; border-radius:4px; display:inline-block; max-width:80%; word-break:break-word;">
-                    ${escapeHtml(m.message)}
-                </span>
-            </div>
-        `).join('');
-
-        if (isPagination) {
-            const oldHeight = container.scrollHeight;
-            container.insertAdjacentHTML('afterbegin', html);
-            container.scrollTop = container.scrollHeight - oldHeight;
-
-        } else {
-            if (container.innerHTML === 'Loading...') {
-                container.innerHTML = html;
-                container.scrollTop = container.scrollHeight;
-            } else {
-                const lastChild = container.lastElementChild;
-                const currentMaxId = lastChild ? parseInt(lastChild.getAttribute('data-id')) : 0;
-                const newMsgs = data.filter(m => m.id > currentMaxId);
-
-                if (newMsgs.length > 0) {
-                     const newHtml = newMsgs.map(m => `
-                        <div class="msg-row" data-id="${m.id}" style="text-align:${m.from_id == State.userId ? 'right' : 'left'}; margin-bottom:4px;">
-                            <span style="background:${m.from_id == State.userId ? '#6366f1' : '#334155'}; padding:4px 8px; border-radius:4px; display:inline-block; max-width:80%; word-break:break-word;">
-                                ${escapeHtml(m.message)}
-                            </span>
-                        </div>
-                    `).join('');
-                    container.insertAdjacentHTML('beforeend', newHtml);
-
-                    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
-                    if (isNearBottom) {
-                        container.scrollTop = container.scrollHeight;
-                    } else {
-                        showToast('New message received (Scroll down)', 'info');
-                    }
-                }
-            }
-        }
-
-        if (data.length > 0) {
-            const newest = data[data.length - 1];
-            if (!isPagination) {
-                const newMax = newest.id;
-                document.getElementById(`chat-${userId}`).setAttribute('data-last-id', newMax);
-                localStorage.setItem(`read_msg_id_${State.userId}_${userId}`, newMax);
-
-                postData('api/messages.php', {
-                    action: 'mark_read',
-                    peer_id: userId,
-                    last_read_msg_id: newMax
-                });
-            }
-        }
-    });
-};
-
-window.sendMsg = function(e, userId) {
-    e.preventDefault();
-    const input = e.target.querySelector('input');
-    const msg = input.value;
-    if(!msg) return;
-
-    postData('api/messages.php', {
-        action: 'send',
-        to_id: userId,
-        message: msg
-    })
-    .then(r => r.json())
-    .then(res => {
-        if(res.success) {
-            input.value = '';
-            window.loadMsgs(userId);
-        } else {
-            showToast(res.error || 'Failed to send', 'error');
-        }
-    });
-};
+window.showToast = showToast;
