@@ -120,10 +120,17 @@ if (!$currentUser) {
         function start() {
             // Check if libraries are loaded
             if (window.ForceGraph3D && window.THREE) {
-                initApp(<?= $_SESSION["user_id"] ?>);
+                // Wait for fonts to be ready before initializing to ensure correct rendering
+                document.fonts.ready.then(() => {
+                    initApp(<?= $_SESSION["user_id"] ?>);
+                });
             } else {
-                // If not ready yet, listen for the event
-                window.addEventListener('lib-ready', () => initApp(<?= $_SESSION["user_id"] ?>));
+                // If libraries aren't ready, listen for the event
+                window.addEventListener('lib-ready', () => {
+                    document.fonts.ready.then(() => {
+                        initApp(<?= $_SESSION["user_id"] ?>);
+                    });
+                });
             }
         }
         
