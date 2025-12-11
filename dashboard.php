@@ -28,15 +28,28 @@ if (!$currentUser) {
     <title>Gossip Chain 3D</title>
     <link rel="stylesheet" href="public/css/style.css">
 
-    <script type="module">
-        import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
-        import SpriteText from 'https://unpkg.com/three-spritetext@1.8.1/dist/three-spritetext.mjs';
-        import ForceGraph3D from 'https://unpkg.com/3d-force-graph@1.72.3/dist/3d-force-graph.module.js';
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://esm.sh/three@0.181.2",
+            "three-spritetext": "https://esm.sh/three-spritetext@1.10.0?external=three",
+            "3d-force-graph": "https://esm.sh/3d-force-graph@1.79.0?external=three"
+        }
+    }
+    </script>
 
-        // Expose as globals for existing app scripts
+    <script type="module">
+        import * as THREE from 'three';
+        import SpriteText from 'three-spritetext';
+        import ForceGraph3D from '3d-force-graph';
+
+        // Expose these as globals so app.js can find them
         window.THREE = THREE;
         window.SpriteText = SpriteText;
         window.ForceGraph3D = ForceGraph3D;
+        
+        // Dispatch a custom event to signal libraries are ready
+        window.dispatchEvent(new Event('lib-ready'));
     </script>
     <script>
         // Inject configuration from backend
@@ -97,10 +110,22 @@ if (!$currentUser) {
 
     <script src="public/js/app.js"></script>
     <script>
-        // Bootstrap the app with PHP session data
-        document.addEventListener('DOMContentLoaded', () => {
-            initApp(<?= $_SESSION["user_id"] ?>);
-        });
+        // Wait for the custom event we added in the head, or fall back to standard load
+        function start() {
+            // Check if libraries are loaded
+            if (window.ForceGraph3D && window.THREE) {
+                initApp(<?= $_SESSION["user_id"] ?>);
+            } else {
+                // If not ready yet, listen for the event
+                window.addEventListener('lib-ready', () => initApp(<?= $_SESSION["user_id"] ?>));
+            }
+        }
+        
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', start);
+        } else {
+            start();
+        }
     </script>
 </body>
 </html>
