@@ -16,8 +16,15 @@ $username = trim($_POST["username"] ?? "");
 $password = $_POST["password"] ?? "";
 
 if ($action === "login") {
-    if (!preg_match('/^[a-zA-Z0-9_]{3,20}$/', $username)) exit("Invalid username format.");
-    if (strlen($password) < 8) exit("Password must be at least 8 characters.");
+    if (!preg_match('/^[a-zA-Z0-9_]{3,20}$/', $username)) {
+        header("Location: ../index.php?error=invalid_username_format");
+        exit;
+    }
+
+    if (strlen($password) < 8) {
+        header("Location: ../index.php?error=password_too_short");
+        exit;
+    }
 
     $stmt = $pdo->prepare('SELECT id, username, real_name, password_hash, avatar FROM users WHERE username=?');
     $stmt->execute([$username]);
@@ -40,16 +47,33 @@ if ($action === "register") {
     $real_name = trim($_POST["real_name"] ?? "");
     $dob = $_POST["dob"] ?? "";
 
-    if (!$username || !$password || !$real_name || !$dob) exit("Missing fields!");
+    if (!$username || !$password || !$real_name || !$dob) {
+        header("Location: ../index.php?error=missing_fields");
+        exit;
+    }
 
-    if (!preg_match('/^[a-zA-Z0-9_]{3,20}$/', $username)) exit("Invalid username format.");
-    if (strlen($password) < 8) exit("Password must be at least 8 characters.");
+    if (!preg_match('/^[a-zA-Z0-9_]{3,20}$/', $username)) {
+        header("Location: ../index.php?error=invalid_username_format");
+        exit;
+    }
+
+    if (strlen($password) < 8) {
+        header("Location: ../index.php?error=password_too_short");
+        exit;
+    }
+
     $realNameLength = function_exists('mb_strlen') ? mb_strlen($real_name, 'UTF-8') : strlen($real_name);
-    if ($realNameLength > 50) exit("Real name too long.");
+    if ($realNameLength > 50) {
+        header("Location: ../index.php?error=name_too_long");
+        exit;
+    }
 
     // Validate DOB (Strict YYYY-MM-DD)
     $d = DateTime::createFromFormat('Y-m-d', $dob);
-    if (!$d || $d->format('Y-m-d') !== $dob) exit("Invalid Date");
+    if (!$d || $d->format('Y-m-d') !== $dob) {
+        header("Location: ../index.php?error=invalid_date");
+        exit;
+    }
 
     $avatar = $_POST["avatar"] ?? FALLBACK_AVATAR;
     if (!in_array($avatar, AVATARS)) $avatar = FALLBACK_AVATAR;
