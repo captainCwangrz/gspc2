@@ -76,17 +76,11 @@ try {
 
     // 2. Get relationships (incremental if last_update provided)
     if ($isIncremental) {
-        $stmt = $pdo->prepare('SELECT from_id, to_id, type FROM relationships WHERE updated_at > ?');
+        $stmt = $pdo->prepare('SELECT from_id, to_id, type, last_msg_id FROM relationships WHERE updated_at > ?');
         $stmt->execute([$lastUpdateTime]);
         $edges = $stmt->fetchAll();
     } else {
-        $edges = $pdo->query('SELECT from_id, to_id, type FROM relationships')->fetchAll();
-    }
-
-    if ($isIncremental && count($nodes) === 0 && count($edges) === 0 && $lastUpdateTime && $graphState && $graphState > $lastUpdateTime) {
-        $nodes = $pdo->query('SELECT id, username, real_name, avatar, signature FROM users')->fetchAll();
-        $edges = $pdo->query('SELECT from_id, to_id, type FROM relationships')->fetchAll();
-        $isIncremental = false;
+        $edges = $pdo->query('SELECT from_id, to_id, type, last_msg_id FROM relationships')->fetchAll();
     }
 
     // 3. Get pending requests
@@ -100,20 +94,21 @@ try {
     $stmt->execute([$current_user_id]);
     $requests = $stmt->fetchAll();
 
-    // 4. Get last message ID for each conversation involving the current user
-    $msgStmt = $pdo->prepare('
-        SELECT
-            CASE
-                WHEN from_id = ? THEN to_id
-                ELSE from_id
-            END as other_id,
-            MAX(id) as last_msg_id
-        FROM messages
-        WHERE from_id = ? OR to_id = ?
-        GROUP BY other_id
-    ');
-    $msgStmt->execute([$current_user_id, $current_user_id, $current_user_id]);
-    $lastMessages = $msgStmt->fetchAll(PDO::FETCH_KEY_PAIR); // [other_id => last_msg_id]
+    // 4. Build last message map using denormalized relationship metadata for notification sync
+    $lastMessages = [];
+    foreach ($edges as $edge) {
+        $fromId = (int)$edge['from_id'];
+        $toId = (int)$edge['to_id'];
+        $lastId = isset($edge['last_msg_id']) ? (int)$edge['last_msg_id'] : 0;
+
+        if ($fromId === (int)$current_user_id) {
+            $key = (string)$toId;
+            $lastMessages[$key] = max($lastMessages[$key] ?? 0, $lastId);
+        } elseif ($toId === (int)$current_user_id) {
+            $key = (string)$fromId;
+            $lastMessages[$key] = max($lastMessages[$key] ?? 0, $lastId);
+        }
+    }
 
     // 5. Format data for frontend
     $formattedNodes = array_map(function($u) use ($lastMessages) {

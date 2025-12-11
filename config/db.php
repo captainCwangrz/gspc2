@@ -27,6 +27,7 @@ class Database {
                     die("Database Connection Error: " . $e->getMessage());
                 }
             }
+
         }
         return self::$pdo;
     }
@@ -56,6 +57,8 @@ class Database {
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     from_id INT NOT NULL, to_id INT NOT NULL,
                     type ENUM('DATING', 'BEST_FRIEND', 'BROTHER', 'SISTER', 'BEEFING', 'CRUSH') NOT NULL,
+                    last_msg_id INT DEFAULT 0,
+                    last_msg_time TIMESTAMP NULL DEFAULT NULL,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                     FOREIGN KEY (from_id) REFERENCES users(id) ON DELETE CASCADE,
                     FOREIGN KEY (to_id) REFERENCES users(id) ON DELETE CASCADE,
