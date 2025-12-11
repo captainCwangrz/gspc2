@@ -1,4 +1,5 @@
 const STAR_TWINKLE_SPEED = 2.8;
+const BACKGROUND_ROTATION_SPEED = 0.025;
 const STAR_TWINKLE_AMPLITUDE = 0.9;
 const CLOCK_START = performance.now() * 0.001;
 
@@ -17,14 +18,20 @@ function buildStarVertexShader() {
         void main() {
             vColor = starColor;
             vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+            // Calculate projected size based on distance
+            float projSize = size * (1000.0 / -mvPosition.z);
+
+            // Fade out very small stars to prevent aliasing flicker
+            float sizeFade = smoothstep(0.3, 1.8, projSize);
+
             gl_Position = projectionMatrix * mvPosition;
-            gl_PointSize = max(1.35, size * (1000.0 / -mvPosition.z));
+            gl_PointSize = max(1.35, projSize);
             float t = 0.5 + 0.5 * sin(uTime * ${STAR_TWINKLE_SPEED} + phase);
             float eased = t * t * (3.0 - 2.0 * t);
             float sizeFactor = clamp((size - 3.0) / 24.0, 0.0, 1.0);
             float sizeEase = pow(sizeFactor, 1.05);
             float scaledAmplitude = ${STAR_TWINKLE_AMPLITUDE} * mix(0.55, 1.08, sizeEase);
-            vOpacity = 0.78 + scaledAmplitude * eased;
+            vOpacity = (0.78 + scaledAmplitude * eased) * sizeFade;
         }
     `;
 }
@@ -36,7 +43,7 @@ const STAR_FRAGMENT_SHADER = `
         vec2 xy = gl_PointCoord.xy - vec2(0.5);
         float dist = length(xy);
         float core = smoothstep(0.1, 0.0, dist);
-        float halo = smoothstep(0.5, 0.0, dist) * 0.4;
+        float halo = smoothstep(0.4, 0.0, dist) * 0.4;
         float alpha = (core + halo);
         if (alpha < 0.01) discard;
         vec3 boosted = (vColor + vec3(0.12, 0.12, 0.24) * (halo * 2.0)) * (1.12 + halo * 0.12);
@@ -130,6 +137,7 @@ export function animateGraph() {
     const scene = graphRef.scene();
     const bg = scene.getObjectByName('starfield-bg');
     if (bg) {
+        bg.rotation.y = elapsed * BACKGROUND_ROTATION_SPEED;
         const stars = bg.children[0];
         if(stars && stars.material.uniforms) {
             stars.material.uniforms.uTime.value = elapsed;
