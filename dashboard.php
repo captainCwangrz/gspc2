@@ -7,6 +7,17 @@ if(!isset($_SESSION["user_id"])) {
     header("Location: index.php");
     exit;
 }
+
+// Fetch fresh user data
+$stmt = $pdo->prepare("SELECT username, real_name, avatar FROM users WHERE id = ?");
+$stmt->execute([$_SESSION['user_id']]);
+$currentUser = $stmt->fetch();
+
+if (!$currentUser) {
+    session_destroy();
+    header("Location: index.php");
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -40,10 +51,10 @@ if(!isset($_SESSION["user_id"])) {
 
     <div id="profile-hud" class="hud-panel">
         <div class="user-header">
-            <img src="assets/<?= htmlspecialchars($_SESSION["avatar"] ?? '0.png') ?>" class="avatar-circle" id="my-avatar">
+            <img src="assets/<?= htmlspecialchars($currentUser["avatar"] ?? '0.png') ?>" class="avatar-circle" id="my-avatar">
             <div>
-                <div class="username-label"><?= htmlspecialchars($_SESSION["real_name"] ?? $_SESSION["username"]) ?></div>
-                <div style="font-size: 0.8em; color: #94a3b8;">@<?= htmlspecialchars($_SESSION["username"]) ?></div>
+                <div class="username-label"><?= htmlspecialchars($currentUser["real_name"] ?? $currentUser["username"]) ?></div>
+                <div style="font-size: 0.8em; color: #94a3b8;">@<?= htmlspecialchars($currentUser["username"]) ?></div>
                 <div class="user-id-label" id="my-user-id" style="font-size: 0.8em; color: #94a3b8;">ID: <?= $_SESSION["user_id"] ?></div>
             </div>
         </div>

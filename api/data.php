@@ -16,16 +16,9 @@ session_write_close(); // Unblock session
 try {
     // --- ETag / Caching Logic ---
 
-    // Efficiently query state hash
-    // We check MAX(updated_at) and COUNT(*) for both users and relationships.
-    // Also check max ID of messages relevant to user to know if unread state changed.
-
-    // Global graph state
-    $graphState = $pdo->query('
-        SELECT
-            (SELECT CONCAT(COUNT(*), "-", MAX(updated_at)) FROM users) as u_hash,
-            (SELECT CONCAT(COUNT(*), "-", MAX(updated_at)) FROM relationships) as r_hash
-    ')->fetch(PDO::FETCH_ASSOC);
+    // Efficiently query state hash using system_state
+    $stmt = $pdo->query("SELECT last_update FROM system_state WHERE id = 1");
+    $graphState = $stmt->fetchColumn();
 
     // Personal state (requests & messages)
     // We include last_msg_id and MAX(timestamp) in hash to ensure we catch all updates
@@ -45,8 +38,7 @@ try {
     $reqState = $reqStmt->fetch(PDO::FETCH_ASSOC);
 
     $etagParts = [
-        $graphState['u_hash'],
-        $graphState['r_hash'],
+        $graphState,
         $msgHash,
         $reqState['max_req_id'],
         $reqState['req_count'],

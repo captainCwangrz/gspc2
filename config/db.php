@@ -19,9 +19,6 @@ class Database {
                     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 ]);
 
-                // Ensure schema is up to date (Migration logic)
-                self::ensureSchema(self::$pdo);
-
             } catch (PDOException $e) {
                 // If database doesn't exist, try to init
                 if ($e->getCode() == 1049) {
@@ -32,81 +29,6 @@ class Database {
             }
         }
         return self::$pdo;
-    }
-
-    public static function ensureSchema($pdo) {
-        try {
-            // Check if real_name exists in users
-            $stmt = $pdo->query("SHOW COLUMNS FROM users LIKE 'real_name'");
-            if (!$stmt->fetch()) {
-                $pdo->exec("ALTER TABLE users ADD COLUMN real_name VARCHAR(100) NOT NULL DEFAULT '' AFTER username");
-            }
-
-            // Check if dob exists in users
-            $stmt = $pdo->query("SHOW COLUMNS FROM users LIKE 'dob'");
-            if (!$stmt->fetch()) {
-                $pdo->exec("ALTER TABLE users ADD COLUMN dob DATE DEFAULT NULL AFTER real_name");
-            }
-
-            // Check if updated_at exists in users
-            $stmt = $pdo->query("SHOW COLUMNS FROM users LIKE 'updated_at'");
-            if (!$stmt->fetch()) {
-                $pdo->exec("ALTER TABLE users ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
-            }
-
-            // Check if updated_at exists in relationships
-            $stmt = $pdo->query("SHOW COLUMNS FROM relationships LIKE 'updated_at'");
-            if (!$stmt->fetch()) {
-                $pdo->exec("ALTER TABLE relationships ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
-            }
-
-            // Check if unique index exists in relationships
-            $stmt = $pdo->query("SHOW INDEX FROM relationships WHERE Key_name = 'idx_rel_from_to'");
-            if (!$stmt->fetch()) {
-                try {
-                    $pdo->exec("ALTER TABLE relationships ADD UNIQUE INDEX idx_rel_from_to (from_id, to_id)");
-                } catch (Exception $e) {
-                    error_log("Migration Warning: Could not create unique index: " . $e->getMessage());
-                }
-            }
-
-            // Check if pagination index exists in messages
-            $stmt = $pdo->query("SHOW INDEX FROM messages WHERE Key_name = 'idx_msg_pagination'");
-            if (!$stmt->fetch()) {
-                $pdo->exec("ALTER TABLE messages ADD INDEX idx_msg_pagination (from_id, to_id, id)");
-            }
-
-            // Create read_receipts table if not exists (Lazy Migration)
-            $pdo->exec("CREATE TABLE IF NOT EXISTS read_receipts (
-                user_id INT NOT NULL,
-                peer_id INT NOT NULL,
-                last_read_msg_id INT NOT NULL DEFAULT 0,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                PRIMARY KEY (user_id, peer_id),
-                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                FOREIGN KEY (peer_id) REFERENCES users(id) ON DELETE CASCADE
-            ) ENGINE=InnoDB");
-
-            // Drop x_pos, y_pos and key coord if they exist
-            $stmt = $pdo->query("SHOW COLUMNS FROM users LIKE 'x_pos'");
-            if ($stmt->fetch()) {
-                try {
-                    // Try to drop the index first if it exists
-                    $pdo->exec("ALTER TABLE users DROP INDEX coord");
-                } catch (Exception $e) {
-                     // Index might not exist or already dropped
-                }
-                $pdo->exec("ALTER TABLE users DROP COLUMN x_pos");
-            }
-            $stmt = $pdo->query("SHOW COLUMNS FROM users LIKE 'y_pos'");
-            if ($stmt->fetch()) {
-                 $pdo->exec("ALTER TABLE users DROP COLUMN y_pos");
-            }
-
-
-        } catch (Exception $e) {
-            error_log("Schema Check Error: " . $e->getMessage());
-        }
     }
 
     // Initialize System: Create DB and Tables
@@ -168,16 +90,24 @@ class Database {
                     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                     FOREIGN KEY (peer_id) REFERENCES users(id) ON DELETE CASCADE
                 ) ENGINE=InnoDB;
+
+                CREATE TABLE IF NOT EXISTS system_state (
+                    id INT PRIMARY KEY,
+                    last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB;
+
+                INSERT IGNORE INTO system_state (id, last_update) VALUES (1, NOW());
             SQL;
             self::$pdo->exec($sql);
-
-            // Re-run ensure schema just in case logic differs
-            self::ensureSchema(self::$pdo);
 
         } catch (PDOException $e) {
             die("Init Error: " . $e->getMessage());
         }
     }
+}
+
+function updateSystemState($pdo) {
+    $pdo->exec("UPDATE system_state SET last_update = NOW() WHERE id = 1");
 }
 
 // Helper constants
