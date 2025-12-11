@@ -22,7 +22,7 @@ const RELATION_TYPES = window.APP_CONFIG && window.APP_CONFIG.RELATION_TYPES ? w
 // Shared star/particle shader controls
 // Faster + deeper twinkles so the effect is visible on both the background and beam particles
 const STAR_TWINKLE_SPEED = 2.8; // ~2.2s full cycle for a clear pulse
-const STAR_TWINKLE_AMPLITUDE = 0.48; // Stronger brightening while keeping highlights controlled
+const STAR_TWINKLE_AMPLITUDE = 0.68; // Stronger brightening while keeping highlights controlled
 const CLOCK_START = performance.now() * 0.001; // Keep shader time values small to preserve precision
 
 function buildStarVertexShader() {
@@ -58,7 +58,8 @@ const STAR_FRAGMENT_SHADER = `
         float halo = smoothstep(0.5, 0.0, dist) * 0.4;
         float alpha = (core + halo);
         if (alpha < 0.01) discard;
-        vec3 finalColor = (vColor + vec3(0.1, 0.1, 0.2) * (halo * 2.0)) * vOpacity;
+        vec3 boosted = (vColor + vec3(0.12, 0.12, 0.24) * (halo * 2.0)) * (1.12 + halo * 0.12);
+        vec3 finalColor = boosted * vOpacity;
         gl_FragColor = vec4(finalColor, alpha * vOpacity);
     }
 `;
@@ -281,8 +282,8 @@ function createSpaceDust(color) {
         const c = base.clone();
         const hsl = {};
         c.getHSL(hsl);
-        hsl.s = Math.min(1.0, hsl.s * (0.9 + Math.random() * 0.2));
-        hsl.l = Math.min(1.0, hsl.l * (0.9 + Math.random() * 0.15));
+        hsl.s = Math.min(1.0, hsl.s * (1.05 + Math.random() * 0.35));
+        hsl.l = Math.min(1.0, hsl.l * (0.98 + Math.random() * 0.18));
         const varied = new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l);
         colors.push(varied.r, varied.g, varied.b);
 
@@ -981,21 +982,21 @@ function initStarfieldBackground() {
             const hsl = {};
             c.getHSL(hsl);
             // subtle shift
-            hsl.s = Math.min(1.0, hsl.s * (0.9 + Math.random() * 0.2));
-            hsl.l = Math.min(1.0, hsl.l * (0.95 + Math.random() * 0.1));
+            hsl.s = Math.min(1.0, hsl.s * (1.05 + Math.random() * 0.3));
+            hsl.l = Math.min(1.0, hsl.l * (1.0 + Math.random() * 0.14));
             const c2 = new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l);
             colors.push(c2.r, c2.g, c2.b);
 
             // Size Distribution: Shift toward larger stars
-            // Base range: 10 to 30, biased toward the upper half
+            // Base range: slightly larger for brighter impressions
             const rand = Math.random();
             const sizeBias = Math.pow(rand, 1.6);
-            let size = 10.0 + sizeBias * 20.0; // Range 10.0 to ~30.0
+            let size = 11.0 + sizeBias * 22.0; // Range ~11.0 to ~33.0
 
             // "Foreground" / Hero Stars: Slightly higher chance to be large/pronounced
-            // 5% chance to be a large "hero" star (Size 26-32)
+            // 5% chance to be a large "hero" star (Size 28-36)
             if (Math.random() < 0.05) {
-                size = 26.0 + Math.random() * 6.0;
+                size = 28.0 + Math.random() * 8.0;
             }
 
             sizes.push(size);
