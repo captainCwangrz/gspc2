@@ -31,10 +31,10 @@ if (!$currentUser) {
     <script type="importmap">
     {
         "imports": {
-            "three": "https://esm.sh/three@0.181.2?target=es2022",
-            "three/": "https://esm.sh/three@0.181.2/?target=es2022",
-            "three-spritetext": "https://esm.sh/three-spritetext@1.10.0?external=three&target=es2022",
-            "3d-force-graph": "https://esm.sh/3d-force-graph@1.79.0?external=three&target=es2022"
+            "three": "https://esm.sh/three@0.181.2",
+            "three/": "https://esm.sh/three@0.181.2/",
+            "three-spritetext": "https://esm.sh/three-spritetext@1.10.0?external=three",
+            "3d-force-graph": "https://esm.sh/3d-force-graph@1.79.0?external=three"
         }
     }
     </script>
