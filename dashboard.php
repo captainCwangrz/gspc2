@@ -28,9 +28,16 @@ if (!$currentUser) {
     <title>Gossip Chain 3D</title>
     <link rel="stylesheet" href="public/css/style.css">
 
-    <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
-    <script src="https://unpkg.com/three-spritetext@1.8.1/dist/three-spritetext.min.js"></script>
-    <script src="https://unpkg.com/3d-force-graph@1.72.3/dist/3d-force-graph.min.js"></script>
+    <script type="module">
+        import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+        import SpriteText from 'https://unpkg.com/three-spritetext@1.8.1/dist/three-spritetext.mjs';
+        import ForceGraph3D from 'https://unpkg.com/3d-force-graph@1.72.3/dist/3d-force-graph.module.js';
+
+        // Expose as globals for existing app scripts
+        window.THREE = THREE;
+        window.SpriteText = SpriteText;
+        window.ForceGraph3D = ForceGraph3D;
+    </script>
     <script>
         // Inject configuration from backend
         window.APP_CONFIG = {

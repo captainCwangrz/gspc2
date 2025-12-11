@@ -127,6 +127,11 @@ function initApp(userId) {
             node.fz = node.z;
         });
 
+    const renderer = Graph.renderer && Graph.renderer();
+    if (renderer) {
+        renderer.useLegacyLights = false;
+    }
+
     // Tune Physics Forces
     Graph.d3Force('charge').strength(-400); // Stronger repulsion (default ~ -30)
     Graph.d3Force('link').distance(120);    // Longer links (default ~ 30)
