@@ -269,7 +269,9 @@ input, button, select, textarea { font-family: inherit; }
 }
 
 .scene-tooltip {
-    transform: translate(15px, 15px);
+    /* Increased Y offset from 15px to 35px to clear the mouse cursor */
+    transform: translate(10px, 35px);
     font-family: 'Fredoka', sans-serif !important;
     border-radius: 4px !important;
+    z-index: 1000 !important;
 }
