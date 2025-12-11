@@ -6,6 +6,7 @@ const CLOCK_START = performance.now() * 0.001;
 let stateRef;
 let configRef;
 let graphRef = null;
+const textureCache = new Map();
 
 function buildStarVertexShader() {
     return `
@@ -113,19 +114,26 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
 export function animateGraph() {
     if (!graphRef || !stateRef) return;
 
+    if (typeof document !== 'undefined' && document.hidden) {
+        requestAnimationFrame(animateGraph);
+        return;
+    }
+
     const time = Date.now() * 0.0015;
     const elapsed = (performance.now() * 0.001) - CLOCK_START;
     const opacity = 0.45 + Math.sin(time) * 0.15;
     const scaleMod = 1.0 + Math.sin(time) * 0.05;
 
-    stateRef.graphData.nodes.forEach(n => {
+    const nodes = (stateRef.graphData && stateRef.graphData.nodes) ? stateRef.graphData.nodes : [];
+    nodes.forEach(n => {
         if(n.haloSprite) {
              n.haloSprite.material.opacity = opacity;
              n.haloSprite.scale.set(60 * scaleMod, 60 * scaleMod, 1);
         }
     });
 
-    stateRef.graphData.links.forEach(link => {
+    const links = (stateRef.graphData && stateRef.graphData.links) ? stateRef.graphData.links : [];
+    links.forEach(link => {
         if(link.__dust) {
             link.__dust.rotation.z += 0.005;
             if (link.__dustMat && link.__dustMat.uniforms && link.__dustMat.uniforms.uTime) {
@@ -272,64 +280,67 @@ function createSpaceDust(color) {
 }
 
 function nodeRenderer(node) {
-    const size = 64;
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext('2d');
+    const cacheKey = `${node.avatar}|${node.id === stateRef.userId ? 'self' : 'other'}|${(node.name || '').charAt(0).toUpperCase()}`;
+    if (!textureCache.has(cacheKey)) {
+        const size = 64;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const isCurrentUser = node.id === stateRef.userId;
+        const texture = new THREE.CanvasTexture(canvas);
 
-    const draw = (img) => {
-        ctx.clearRect(0,0,size,size);
+        const draw = (img = null) => {
+            ctx.clearRect(0,0,size,size);
 
-        ctx.beginPath();
-        ctx.arc(size/2, size/2, size/2, 0, 2 * Math.PI);
-        ctx.fillStyle = node.id === stateRef.userId ? '#ffffff' : '#1e293b';
-        ctx.fill();
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, size/2, 0, 2 * Math.PI);
+            ctx.fillStyle = isCurrentUser ? '#ffffff' : '#1e293b';
+            ctx.fill();
 
-        if(img) {
-            ctx.save();
+            if(img) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(size/2, size/2, size/2 - 2, 0, 2 * Math.PI);
+                ctx.clip();
+                ctx.drawImage(img, 0, 0, size, size);
+                ctx.restore();
+            } else {
+                ctx.fillStyle = 'white';
+                ctx.font = '30px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText((node.name || '').charAt(0).toUpperCase(), size/2, size/2);
+            }
+
             ctx.beginPath();
             ctx.arc(size/2, size/2, size/2 - 2, 0, 2 * Math.PI);
-            ctx.clip();
-            ctx.drawImage(img, 0, 0, size, size);
-            ctx.restore();
-        } else {
-            ctx.fillStyle = 'white';
-            ctx.font = '30px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(node.name.charAt(0).toUpperCase(), size/2, size/2);
-        }
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = isCurrentUser ? '#6366f1' : '#475569';
+            ctx.stroke();
 
-        ctx.beginPath();
-        ctx.arc(size/2, size/2, size/2 - 2, 0, 2 * Math.PI);
-        ctx.lineWidth = 4;
-        ctx.strokeStyle = node.id === stateRef.userId ? '#6366f1' : '#475569';
-        ctx.stroke();
-    };
+            texture.needsUpdate = true;
+        };
 
-    if (node.texture) {
-        node.texture.dispose();
+        const img = new Image();
+        img.crossOrigin = "Anonymous";
+        img.onload = () => draw(img);
+        img.onerror = () => draw(null);
+        img.src = node.avatar;
+
+        draw(null);
+
+        textureCache.set(cacheKey, texture);
     }
 
-    const texture = new THREE.CanvasTexture(canvas);
+    const texture = textureCache.get(cacheKey);
     const material = new THREE.SpriteMaterial({ map: texture });
     const sprite = new THREE.Sprite(material);
     sprite.scale.set(16, 16, 1);
     sprite.renderOrder = 10;
 
-    const img = new Image();
-    img.crossOrigin = "Anonymous";
-    img.src = node.avatar;
-    img.onload = () => { draw(img); texture.needsUpdate = true; };
-    img.onerror = () => { draw(null); texture.needsUpdate = true; };
-
-    node.draw = draw;
-    node.texture = texture;
-    node.img = img;
     node.dispose = () => {
-        if(node.texture) node.texture.dispose();
-        if(node.material) node.material.dispose();
+        if(material) material.dispose();
         if(node.haloTexture) node.haloTexture.dispose();
         if(node.haloMaterial) node.haloMaterial.dispose();
     };

@@ -16,17 +16,21 @@ export function postData(url, data) {
     return fetch(url, { method: 'POST', body: fd });
 }
 
-export async function fetchGraphData({ etag = null, lastUpdate = null } = {}) {
+export async function fetchGraphData({ etag = null, lastUpdate = null, wait = false } = {}) {
     const headers = {};
     if (etag) headers['If-None-Match'] = etag;
 
     const params = new URLSearchParams();
     if (lastUpdate) params.set('last_update', lastUpdate);
+    if (wait && etag) params.set('wait', 'true');
     const query = params.toString();
     const url = query ? `api/data.php?${query}` : 'api/data.php';
 
     const res = await fetch(url, { headers });
-    if (res.status === 304) return { status: 304 };
+    if (res.status === 304) {
+        const timedOut = res.headers.get('X-Long-Poll-Timeout') === '1';
+        return { status: 304, timedOut };
+    }
     if (!res.ok) {
         return { status: res.status };
     }

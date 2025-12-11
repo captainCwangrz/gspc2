@@ -121,7 +121,9 @@ try {
         $to_id = (int)($_GET["to_id"] ?? 0);
         $before_id = (int)($_GET["before_id"] ?? 0);
         $limit = (int)($_GET["limit"] ?? 50);
-        if ($limit > 100) $limit = 100; // Hard cap limit
+        if ($limit <= 0 || $limit > 50) {
+            $limit = 50; // Enforce strict cap
+        }
 
         if (!$to_id || !userExists($to_id, $pdo)) {
             http_response_code(404);
@@ -168,8 +170,13 @@ try {
         }
         exit;
     }
-} catch (Exception $e) {
+} catch (PDOException $e) {
+    error_log('Messages endpoint PDO error: ' . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['error' => $e->getMessage()]);
+    echo json_encode(['error' => 'Internal Server Error']);
+} catch (Exception $e) {
+    error_log('Messages endpoint error: ' . $e->getMessage());
+    http_response_code(500);
+    echo json_encode(['error' => 'Internal Server Error']);
 }
 ?>

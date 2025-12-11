@@ -21,21 +21,13 @@ if ($lastUpdateParam) {
 $isIncremental = !empty($lastUpdateTime);
 session_write_close(); // Unblock session
 
-try {
-    // --- ETag / Caching Logic ---
-
-    // Efficiently query state hash using system_state
+function buildStateSnapshot(PDO $pdo, int $current_user_id): array {
     $stmt = $pdo->query("SELECT last_update FROM system_state WHERE id = 1");
     $graphState = $stmt->fetchColumn();
 
-    // Personal state (requests & messages)
-    // We include last_msg_id and MAX(timestamp) in hash to ensure we catch all updates
-    $msgStmt = $pdo->prepare('
-        SELECT CONCAT(MAX(id), "-", MAX(timestamp)) as msg_hash FROM messages
-        WHERE from_id = ? OR to_id = ?
-    ');
-    $msgStmt->execute([$current_user_id, $current_user_id]);
-    $msgHash = $msgStmt->fetchColumn();
+    $relStmt = $pdo->prepare('SELECT MAX(updated_at) FROM relationships WHERE from_id = ? OR to_id = ?');
+    $relStmt->execute([$current_user_id, $current_user_id]);
+    $relUpdatedAt = $relStmt->fetchColumn();
 
     $reqStmt = $pdo->prepare('
         SELECT MAX(id) as max_req_id, COUNT(*) as req_count
@@ -47,18 +39,52 @@ try {
 
     $etagParts = [
         $graphState,
-        $msgHash,
+        $relUpdatedAt ?: '0',
         $reqState['max_req_id'],
         $reqState['req_count'],
         $current_user_id
     ];
 
-    $etag = md5(implode('|', $etagParts));
+    return [
+        'graph_state'   => $graphState,
+        'rel_updated_at'=> $relUpdatedAt,
+        'req_state'     => $reqState,
+        'etag'          => md5(implode('|', $etagParts)),
+    ];
+}
+
+try {
+    $waitForChange = isset($_GET['wait']) && $_GET['wait'] === 'true';
+    $clientEtag = isset($_SERVER['HTTP_IF_NONE_MATCH']) ? trim($_SERVER['HTTP_IF_NONE_MATCH'], '"') : null;
+
+    $stateSnapshot = buildStateSnapshot($pdo, (int)$current_user_id);
+    $etag = $stateSnapshot['etag'];
+    $graphState = $stateSnapshot['graph_state'];
+
+    if ($waitForChange && $clientEtag) {
+        $timeoutSeconds = 20;
+        $start = microtime(true);
+
+        while ($etag === $clientEtag && (microtime(true) - $start) < $timeoutSeconds) {
+            usleep(500000); // 0.5s
+            $stateSnapshot = buildStateSnapshot($pdo, (int)$current_user_id);
+            $etag = $stateSnapshot['etag'];
+            $graphState = $stateSnapshot['graph_state'];
+        }
+
+        if ($etag === $clientEtag) {
+            header('ETag: "' . $etag . '"');
+            header('Cache-Control: no-cache, must-revalidate');
+            header('X-Long-Poll-Timeout: 1');
+            http_response_code(304);
+            exit;
+        }
+    }
 
     header('ETag: "' . $etag . '"');
     header('Cache-Control: no-cache, must-revalidate'); // Force browser to check ETag
 
-    if (isset($_SERVER['HTTP_IF_NONE_MATCH']) && trim($_SERVER['HTTP_IF_NONE_MATCH'], '"') === $etag) {
+    if ($clientEtag && $clientEtag === $etag) {
         http_response_code(304);
         exit;
     }
@@ -142,7 +168,12 @@ try {
         'incremental' => $isIncremental
     ]);
 
-} catch (Exception $e) {
+} catch (PDOException $e) {
+    error_log('Data endpoint PDO error: ' . $e->getMessage());
     http_response_code(500);
-    echo json_encode(['error' => $e->getMessage()]);
+    echo json_encode(['error' => 'Internal Server Error']);
+} catch (Exception $e) {
+    error_log('Data endpoint error: ' . $e->getMessage());
+    http_response_code(500);
+    echo json_encode(['error' => 'Internal Server Error']);
 }

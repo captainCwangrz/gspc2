@@ -282,10 +282,6 @@ function openChat(userId, encodedName) {
         }
 
         node.hasActiveNotification = false;
-        if(node.draw) {
-             node.draw(node.img);
-             node.texture.needsUpdate = true;
-        }
         updateNotificationHUD(State.graphData.nodes);
     }
 
@@ -356,11 +352,17 @@ function loadMsgs(userId, beforeId = 0) {
     .then(data => {
         if(data.error) return;
 
-        if (data.length === 0 && isPagination) {
+        const messages = Array.isArray(data) ? data : [];
+        if (messages.length === 0 && isPagination) {
              return;
         }
 
-        const html = data.map(m => `
+        const existingIds = new Set(Array.from(container.children).map(child => child.getAttribute('data-id')).filter(Boolean));
+
+        const payload = isPagination ? messages.filter(m => !existingIds.has(String(m.id))) : messages;
+        if (payload.length === 0 && isPagination) return;
+
+        const html = payload.map(m => `
             <div class="msg-row" data-id="${m.id}" style="text-align:${m.from_id == State.userId ? 'right' : 'left'}; margin-bottom:4px;">
                 <span style="background:${m.from_id == State.userId ? '#6366f1' : '#334155'}; padding:4px 8px; border-radius:4px; display:inline-block; max-width:80%; word-break:break-word;">
                     ${escapeHtml(m.message)}
@@ -379,7 +381,7 @@ function loadMsgs(userId, beforeId = 0) {
             } else {
                 const lastChild = container.lastElementChild;
                 const currentMaxId = lastChild ? parseInt(lastChild.getAttribute('data-id')) : 0;
-                const newMsgs = data.filter(m => m.id > currentMaxId);
+                const newMsgs = messages.filter(m => m.id > currentMaxId);
 
                 if (newMsgs.length > 0) {
                      const newHtml = newMsgs.map(m => `
@@ -401,8 +403,8 @@ function loadMsgs(userId, beforeId = 0) {
             }
         }
 
-        if (data.length > 0) {
-            const newest = data[data.length - 1];
+        if (messages.length > 0) {
+            const newest = messages[messages.length - 1];
             if (!isPagination) {
                 const newMax = newest.id;
                 document.getElementById(`chat-${userId}`).setAttribute('data-last-id', newMax);
