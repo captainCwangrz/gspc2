@@ -63,6 +63,8 @@ if (!$currentUser) {
     </script>
 </head>
 <body>
+    <div style="font-family: 'Fredoka'; opacity: 0; position: absolute; pointer-events: none;">.</div>
+    <div style="font-family: 'Varela Round'; opacity: 0; position: absolute; pointer-events: none;">.</div>
     <div id="loader"><h2>Connecting to Gossip Neural Net...</h2></div>
     <div id="3d-graph"></div>
 
