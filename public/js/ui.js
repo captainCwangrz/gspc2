@@ -3,11 +3,13 @@ import { postData } from './api.js';
 let State;
 let refreshDataFn;
 let relationTypes = [];
+let Config;
 
 export function initUI({ state, config, relationTypes: relTypes, refreshData }) {
     State = state;
     relationTypes = relTypes || [];
     refreshDataFn = refreshData;
+    Config = config;
 
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
@@ -50,6 +52,10 @@ export function initUI({ state, config, relationTypes: relTypes, refreshData }) 
     window.zoomToUser = zoomToUser;
 }
 
+export function getRelLabel(type) {
+    return Config?.relStyles?.[type]?.label ?? type;
+}
+
 export function escapeHtml(text) {
     if (!text) return text;
     return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
@@ -89,7 +95,7 @@ export function updateRequestsUI(requests) {
     container.style.display = 'block';
     list.innerHTML = requests.map(r => `
         <div class="req-item" style="background:rgba(255,255,255,0.05); padding:8px; margin-bottom:8px; border-radius:6px; font-size:0.9em;">
-            <strong>${escapeHtml(r.username)}</strong> &rarr; ${r.type}
+            <strong>${escapeHtml(r.username)}</strong> &rarr; ${getRelLabel(r.type)}
             <div class="btn-group" style="margin-top:6px; display:flex; gap:8px;">
                 <button class="btn btn-accept" style="background:#10b981; color:white; border:none; padding:4px 12px; border-radius:4px; cursor:pointer;" onclick="window.acceptReq(${r.id})">Accept</button>
                 <button class="btn btn-reject" style="background:#ef4444; color:white; border:none; padding:4px 12px; border-radius:4px; cursor:pointer;" onclick="window.rejectReq(${r.id})">Deny</button>

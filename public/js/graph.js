@@ -585,7 +585,7 @@ function linkRenderer(link) {
     }
 
     const sprite = new SpriteText(link.displayLabel || (style ? style.label : link.type));
-    sprite.fontFace = '"Fredoka", "Varela Round", sans-serif';
+    sprite.fontFace = '"Fredoka", "Varela Round", "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
     sprite.color = style ? style.color : 'lightgrey';
     sprite.textHeight = 4.5;
     sprite.backgroundColor = 'rgba(0,0,0,0)';

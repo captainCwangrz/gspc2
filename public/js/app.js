@@ -1,6 +1,6 @@
 import { fetchGraphData, syncReadReceipts } from './api.js';
 import { createGraph, animateGraph, initStarfieldBackground, disposeLinkVisual } from './graph.js';
-import { initUI, updateRequestsUI, updateNotificationHUD, showToast, escapeHtml } from './ui.js';
+import { initUI, updateRequestsUI, updateNotificationHUD, showToast, escapeHtml, getRelLabel } from './ui.js';
 
 if (!window.APP_CONFIG) {
     console.error('APP_CONFIG is missing. Unable to initialize application configuration.');
@@ -450,19 +450,27 @@ function showNodeInspector(node) {
 
         const mutualCrush = outgoing && incoming && outgoing.type === 'CRUSH' && incoming.type === 'CRUSH';
 
+        const canMessage = Boolean(outgoing || incoming || undirected);
+        const canManageRelationship = Boolean(outgoing || undirected);
+        const activeRel = outgoing || undirected;
+        if (activeRel && !statusHtml) {
+            const style = CONFIG.relStyles[activeRel.type] || { color: '#fff' };
+            statusHtml = `<div style="color:${style.color}">${getRelLabel(activeRel.type)}</div>`;
+        }
+
         if (outgoing) {
             const style = CONFIG.relStyles[outgoing.type] || { color: '#fff' };
             if (isDirected(outgoing.type)) {
-                statusHtml += `<div style="color:${style.color}">You → ${escapeHtml(node.name)}: ${outgoing.type}</div>`;
+                statusHtml += `<div style="color:${style.color}">You → ${escapeHtml(node.name)}: ${getRelLabel(outgoing.type)}</div>`;
             } else {
-                statusHtml += `<div style="color:${style.color}">${outgoing.type}</div>`;
+                statusHtml += `<div style="color:${style.color}">${getRelLabel(outgoing.type)}</div>`;
             }
         }
 
         if (incoming) {
             const style = CONFIG.relStyles[incoming.type] || { color: '#fff' };
             if (isDirected(incoming.type)) {
-                statusHtml += `<div style="color:${style.color}">${escapeHtml(node.name)} → You: ${incoming.type}</div>`;
+                statusHtml += `<div style="color:${style.color}">${escapeHtml(node.name)} → You: ${getRelLabel(incoming.type)}</div>`;
             }
         }
 
@@ -474,16 +482,10 @@ function showNodeInspector(node) {
             statusHtml += `<div style="margin-top:6px; color:#f472b6; font-weight:bold;">💞 Mutual Crush</div>`;
         }
 
-        const activeRel = outgoing || undirected;
-        if (activeRel && !statusHtml) {
-            const style = CONFIG.relStyles[activeRel.type] || { color: '#fff' };
-            statusHtml = `<div style="color:${style.color}">${activeRel.type}</div>`;
-        }
-
-        if(activeRel) {
+        if(canManageRelationship) {
             const style = CONFIG.relStyles[activeRel.type] || { color: '#fff' };
             const options = RELATION_TYPES.map(t =>
-                `<option value="${t}" ${activeRel.type === t ? 'selected' : ''}>${t}</option>`
+                `<option value="${t}" ${activeRel.type === t ? 'selected' : ''}>${getRelLabel(t)}</option>`
             ).join('');
 
             actionHtml = `
@@ -501,6 +503,22 @@ function showNodeInspector(node) {
                 <button class="action-btn" data-action="open-chat" data-user-id="${node.id}">💬 Message</button>
                 <button class="action-btn" style="background:#ef4444; margin-top:8px;" data-action="remove-rel" data-user-id="${node.id}">💔 Remove</button>
             `;
+        } else if (canMessage) {
+            const statusBlock = statusHtml ? `
+                <div style="margin-top:10px; padding:8px; background:rgba(255,255,255,0.1); border-radius:4px; text-align:center;">
+                    ${statusHtml}
+                </div>
+            ` : '';
+            const preferredType = incoming && incoming.type === 'CRUSH' ? 'CRUSH' : null;
+            const options = RELATION_TYPES.map(t => `<option value="${t}" ${preferredType === t ? 'selected' : ''}>Request ${getRelLabel(t)}</option>`).join('');
+            actionHtml = `
+                ${statusBlock}
+                <button class="action-btn" data-action="open-chat" data-user-id="${node.id}">💬 Message</button>
+                <select id="req-type" style="width:100%; padding:8px; margin-top:10px; background:#1e293b; color:white; border:1px solid #475569; border-radius:4px;">
+                    ${options}
+                </select>
+                <button class="action-btn" data-action="send-request" data-user-id="${node.id}">🚀 Send Request</button>
+            `;
         } else {
             if (node.last_msg_id > 0) {
                  actionHtml += `
@@ -509,7 +527,7 @@ function showNodeInspector(node) {
             }
 
             const preferredType = incoming && incoming.type === 'CRUSH' ? 'CRUSH' : null;
-            const options = RELATION_TYPES.map(t => `<option value="${t}" ${preferredType === t ? 'selected' : ''}>Request ${t}</option>`).join('');
+            const options = RELATION_TYPES.map(t => `<option value="${t}" ${preferredType === t ? 'selected' : ''}>Request ${getRelLabel(t)}</option>`).join('');
             actionHtml += `
                 <select id="req-type" style="width:100%; padding:8px; margin-top:10px; background:#1e293b; color:white; border:1px solid #475569; border-radius:4px;">
                     ${options}
@@ -556,7 +574,7 @@ function showLinkInspector(link) {
     const dataDiv = document.getElementById('inspector-data');
     panel.style.display = 'block';
 
-    const style = CONFIG.relStyles[link.type];
+    const style = CONFIG.relStyles[link.type] || { color: '#fff', label: link.type };
 
     const sourceName = escapeHtml(link.source.name);
     const targetName = escapeHtml(link.target.name);
