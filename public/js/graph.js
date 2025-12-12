@@ -79,7 +79,8 @@ function buildStarVertexShader() {
             float projSize = size * (1000.0 / -mvPosition.z);
 
             // Fade out very small stars to prevent aliasing flicker (especially when zoomed out)
-            float sizeFade = smoothstep(0.6, 1.8, projSize);
+            // Increase fade thresholds so stars are fully transparent before hardware stops drawing sub-pixel points
+            float sizeFade = smoothstep(1.5, 3.2, projSize);
 
             gl_Position = projectionMatrix * mvPosition;
             gl_PointSize = clamp(projSize, 0.0, 28.0);
