@@ -113,6 +113,13 @@ function applyGraphPayload(data) {
         // the particle beams for the updated relationship types.
         if (Graph.linkThreeObject) {
             Graph.linkThreeObject(Graph.linkThreeObject());
+
+            // The recreated 3D objects start at the origin. Nudge the
+            // force simulation so linkPositionUpdate runs and places
+            // them correctly.
+            if (Graph.d3AlphaTarget) {
+                Graph.d3AlphaTarget(0.1).d3Restart();
+            }
         }
     }
 
@@ -199,6 +206,11 @@ function mergeGraphData(nodes, links, incremental = false) {
         // If type changed (e.g. Request Accepted), flag as topology change
         if (existing.type !== l.type) {
             hasTopologyChanges = true;
+
+            // Remove cached particle references so the renderer builds
+            // fresh assets for the new relationship type.
+            delete existing.__dust;
+            delete existing.__dustMat;
         }
         linkMap.set(key, { ...existing, ...l });
     });
