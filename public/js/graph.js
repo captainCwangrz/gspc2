@@ -93,6 +93,36 @@ function buildStarVertexShader() {
     `;
 }
 
+function buildDustVertexShader() {
+    return `
+        uniform float uTime;
+        attribute vec3 starColor;
+        attribute float size;
+        attribute float phase;
+        varying vec3 vColor;
+        varying float vOpacity;
+        void main() {
+            vColor = starColor;
+            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+            
+            // Calculate projected size based on distance
+            float projSize = size * (1000.0 / -mvPosition.z);
+
+            gl_Position = projectionMatrix * mvPosition;
+            gl_PointSize = clamp(projSize, 0.0, 28.0);
+            
+            float t = 0.5 + 0.5 * sin(uTime * ${STAR_TWINKLE_SPEED} + phase);
+            float eased = t * t * (3.0 - 2.0 * t);
+            float sizeFactor = clamp((size - 3.0) / 24.0, 0.0, 1.0);
+            float sizeEase = pow(sizeFactor, 1.05);
+            float scaledAmplitude = ${STAR_TWINKLE_AMPLITUDE} * mix(0.55, 1.08, sizeEase);
+            
+            // Opacity is purely based on twinkle for beams
+            vOpacity = (0.78 + scaledAmplitude * eased);
+        }
+    `;
+}
+
 const STAR_FRAGMENT_SHADER = `
     varying vec3 vColor;
     varying float vOpacity;
@@ -380,7 +410,7 @@ function createSpaceDust(color) {
         uniforms: {
             uTime: { value: 0 }
         },
-        vertexShader: buildStarVertexShader(),
+        vertexShader: buildDustVertexShader(),
         fragmentShader: STAR_FRAGMENT_SHADER,
         transparent: true,
         depthWrite: false,
