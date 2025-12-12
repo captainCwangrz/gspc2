@@ -2,11 +2,67 @@ const STAR_TWINKLE_SPEED = 2.8;
 const BACKGROUND_ROTATION_SPEED = 0.01;
 const STAR_TWINKLE_AMPLITUDE = 0.9;
 const CLOCK_START = performance.now() * 0.001;
+const CAMERA_MOVE_SPEED = 30;
 
 let stateRef;
 let configRef;
 let graphRef = null;
+let lastFrameTime = null;
 const textureCache = new Map();
+const movementKeys = new Set(['w', 'a', 's', 'd']);
+const pressedKeys = { w: false, a: false, s: false, d: false };
+let removeMovementListeners = null;
+
+function isFormFieldActive() {
+    if (typeof document === 'undefined') return false;
+    const active = document.activeElement;
+    if (!active) return false;
+
+    const tagName = active.tagName ? active.tagName.toLowerCase() : '';
+    const isFormField = ['input', 'textarea', 'select', 'button'].includes(tagName);
+
+    return isFormField || active.isContentEditable;
+}
+
+function cleanupMovementHandlers() {
+    if (removeMovementListeners) {
+        removeMovementListeners();
+    }
+}
+
+function setupMovementHandlers() {
+    if (typeof window === 'undefined') return;
+
+    cleanupMovementHandlers();
+
+    const onKeyDown = (event) => {
+        if (isFormFieldActive()) return;
+        const key = event.key ? event.key.toLowerCase() : '';
+        if (movementKeys.has(key)) {
+            pressedKeys[key] = true;
+        }
+    };
+
+    const onKeyUp = (event) => {
+        const key = event.key ? event.key.toLowerCase() : '';
+        if (movementKeys.has(key)) {
+            pressedKeys[key] = false;
+        }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+
+    removeMovementListeners = () => {
+        window.removeEventListener('keydown', onKeyDown);
+        window.removeEventListener('keyup', onKeyUp);
+        pressedKeys.w = false;
+        pressedKeys.a = false;
+        pressedKeys.s = false;
+        pressedKeys.d = false;
+        removeMovementListeners = null;
+    };
+}
 
 function buildStarVertexShader() {
     return `
@@ -130,18 +186,28 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
         controls.enableZoom = true;
     }
 
+    setupMovementHandlers();
+
     return graphRef;
 }
 
 export function animateGraph() {
     if (!graphRef || !stateRef) return;
 
+    const now = performance.now();
+
     if (typeof document !== 'undefined' && document.hidden) {
+        lastFrameTime = now;
         requestAnimationFrame(animateGraph);
         return;
     }
 
-    const now = performance.now();
+    if (lastFrameTime === null) {
+        lastFrameTime = now;
+    }
+
+    const deltaSeconds = (now - lastFrameTime) * 0.001;
+    lastFrameTime = now;
 
     const time = Date.now() * 0.0015;
     const elapsed = (now * 0.001) - CLOCK_START;
@@ -170,6 +236,28 @@ export function animateGraph() {
 
     if (graphRef) {
         const controls = graphRef.controls();
+        const camera = controls && controls.object ? controls.object : null;
+
+        if (controls && camera) {
+            const forward = new THREE.Vector3();
+            camera.getWorldDirection(forward);
+            const right = forward.clone().cross(camera.up);
+
+            forward.normalize();
+            if (right.lengthSq() > 0) right.normalize();
+
+            const movement = new THREE.Vector3();
+            if (pressedKeys.w) movement.add(forward);
+            if (pressedKeys.s) movement.sub(forward);
+            if (pressedKeys.d) movement.add(right);
+            if (pressedKeys.a) movement.sub(right);
+
+            if (movement.lengthSq() > 0 && deltaSeconds > 0) {
+                movement.normalize().multiplyScalar(CAMERA_MOVE_SPEED * deltaSeconds);
+                camera.position.add(movement);
+                controls.target.add(movement);
+            }
+        }
 
         if (controls) {
             controls.update();
@@ -418,4 +506,12 @@ function linkRenderer(link) {
 
 export function getGraph() {
     return graphRef;
+}
+
+export function destroyGraph() {
+    cleanupMovementHandlers();
+    graphRef = null;
+    stateRef = null;
+    configRef = null;
+    lastFrameTime = null;
 }
