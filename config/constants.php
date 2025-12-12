@@ -11,6 +11,10 @@ const RELATION_TYPES = [
     'CRUSH'
 ];
 
+const DIRECTED_RELATION_TYPES = [
+    'CRUSH'
+];
+
 // Define configuration for relationship styles (used in frontend)
 // This mirrors the structure expected by the frontend
 const RELATION_STYLES = [

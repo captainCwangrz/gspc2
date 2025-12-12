@@ -197,6 +197,15 @@ function mergeGraphData(nodes, links, incremental = false) {
 
     links.forEach(l => {
         const key = linkKey(l);
+        if (l.deleted === true) {
+            const s = typeof l.source === 'object' ? l.source.id : l.source;
+            const t = typeof l.target === 'object' ? l.target.id : l.target;
+            linkMap.delete(key);
+            const reverseKey = `${t}-${s}`;
+            linkMap.delete(reverseKey);
+            hasTopologyChanges = true;
+            return;
+        }
         if (!linkMap.has(key)) {
             hasTopologyChanges = true;
         }

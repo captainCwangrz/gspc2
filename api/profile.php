@@ -39,7 +39,6 @@ if (mb_strlen($new_signature) > 160) {
 try {
     $stmt = $pdo->prepare('UPDATE users SET signature = ? WHERE id = ?');
     $stmt->execute([$new_signature, $user_id]);
-    updateSystemState($pdo);
     echo json_encode(['success' => true, 'message' => 'Signature updated successfully.']);
 } catch (PDOException $e) {
     http_response_code(500);

@@ -85,7 +85,6 @@ if ($action === "register") {
     try {
         $stmt = $pdo->prepare('INSERT INTO users (username, real_name, dob, password_hash, avatar) VALUES (?, ?, ?, ?, ?)');
         $stmt->execute([$username, $real_name, $dob, $password_hash, $avatar]);
-        updateSystemState($pdo);
     } catch (PDOException $e) {
         if ($e->getCode() === "23000" && strpos($e->getMessage(), "username") !== false) {
             header("Location: ../index.php?error=username_exists");

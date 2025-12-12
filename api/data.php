@@ -12,9 +12,13 @@ $lastUpdateParam = $_GET['last_update'] ?? null;
 $lastUpdateTime = null;
 
 if ($lastUpdateParam) {
-    $parsedTime = strtotime($lastUpdateParam);
-    if ($parsedTime !== false) {
-        $lastUpdateTime = date('Y-m-d H:i:s', $parsedTime);
+    $formats = ['Y-m-d H:i:s.u', 'Y-m-d H:i:s'];
+    foreach ($formats as $format) {
+        $dt = DateTime::createFromFormat($format, $lastUpdateParam);
+        if ($dt instanceof DateTime) {
+            $lastUpdateTime = $dt->format('Y-m-d H:i:s.u');
+            break;
+        }
     }
 }
 
@@ -22,12 +26,9 @@ $isIncremental = !empty($lastUpdateTime);
 session_write_close(); // Unblock session
 
 function buildStateSnapshot(PDO $pdo, int $current_user_id): array {
-    $stmt = $pdo->query("SELECT last_update FROM system_state WHERE id = 1");
-    $graphState = $stmt->fetchColumn();
-
-    $relStmt = $pdo->prepare('SELECT MAX(updated_at) FROM relationships WHERE from_id = ? OR to_id = ?');
-    $relStmt->execute([$current_user_id, $current_user_id]);
-    $relUpdatedAt = $relStmt->fetchColumn();
+    $usersUpdatedAt = $pdo->query('SELECT MAX(updated_at) FROM users')->fetchColumn();
+    $relsUpdatedAt = $pdo->query('SELECT MAX(updated_at) FROM relationships')->fetchColumn();
+    $relsMaxMsgId = $pdo->query('SELECT MAX(last_msg_id) FROM relationships')->fetchColumn();
 
     $reqStmt = $pdo->prepare('
         SELECT MAX(id) as max_req_id, COUNT(*) as req_count
@@ -38,16 +39,18 @@ function buildStateSnapshot(PDO $pdo, int $current_user_id): array {
     $reqState = $reqStmt->fetch(PDO::FETCH_ASSOC);
 
     $etagParts = [
-        $graphState,
-        $relUpdatedAt ?: '0',
+        $usersUpdatedAt ?: '0',
+        $relsUpdatedAt ?: '0',
+        $relsMaxMsgId ?: '0',
         $reqState['max_req_id'],
         $reqState['req_count'],
         $current_user_id
     ];
 
     return [
-        'graph_state'   => $graphState,
-        'rel_updated_at'=> $relUpdatedAt,
+        'users_updated_at' => $usersUpdatedAt,
+        'rels_updated_at'  => $relsUpdatedAt,
+        'rels_max_msg_id'  => $relsMaxMsgId,
         'req_state'     => $reqState,
         'etag'          => md5(implode('|', $etagParts)),
     ];
@@ -59,7 +62,7 @@ try {
 
     $stateSnapshot = buildStateSnapshot($pdo, (int)$current_user_id);
     $etag = $stateSnapshot['etag'];
-    $graphState = $stateSnapshot['graph_state'];
+    $graphState = max($stateSnapshot['users_updated_at'] ?? '0', $stateSnapshot['rels_updated_at'] ?? '0');
 
     if ($waitForChange && $clientEtag) {
         $timeoutSeconds = 20;
@@ -69,7 +72,7 @@ try {
             usleep(500000); // 0.5s
             $stateSnapshot = buildStateSnapshot($pdo, (int)$current_user_id);
             $etag = $stateSnapshot['etag'];
-            $graphState = $stateSnapshot['graph_state'];
+            $graphState = max($stateSnapshot['users_updated_at'] ?? '0', $stateSnapshot['rels_updated_at'] ?? '0');
         }
 
         if ($etag === $clientEtag) {
@@ -91,8 +94,9 @@ try {
 
     // --- Full Data Fetch (Only if Changed) ---
 
-    $relUpdate = $stateSnapshot['rel_updated_at'] ?? '0000-00-00 00:00:00';
-    $clientNextCursor = ($relUpdate > $graphState) ? $relUpdate : $graphState;
+    $relUpdate = $stateSnapshot['rels_updated_at'] ?? '0000-00-00 00:00:00.000000';
+    $userUpdate = $stateSnapshot['users_updated_at'] ?? '0000-00-00 00:00:00.000000';
+    $clientNextCursor = max($relUpdate, $userUpdate);
 
     // 1. Get nodes (incremental if last_update provided)
     if ($isIncremental) {
@@ -105,11 +109,11 @@ try {
 
     // 2. Get relationships (incremental if last_update provided)
     if ($isIncremental) {
-        $stmt = $pdo->prepare('SELECT from_id, to_id, type, last_msg_id FROM relationships WHERE updated_at > ?');
+        $stmt = $pdo->prepare('SELECT from_id, to_id, type, last_msg_id, deleted_at FROM relationships WHERE updated_at > ?');
         $stmt->execute([$lastUpdateTime]);
         $edges = $stmt->fetchAll();
     } else {
-        $edges = $pdo->query('SELECT from_id, to_id, type, last_msg_id FROM relationships')->fetchAll();
+        $edges = $pdo->query('SELECT from_id, to_id, type, last_msg_id, deleted_at FROM relationships WHERE deleted_at IS NULL')->fetchAll();
     }
 
     // 3. Get pending requests
@@ -123,12 +127,15 @@ try {
     $stmt->execute([$current_user_id]);
     $requests = $stmt->fetchAll();
 
-    // 4. Build last message map using denormalized relationship metadata for notification sync
+    // 4. Build last message map using relationships table (decoupled from edge delta)
     $lastMessages = [];
-    foreach ($edges as $edge) {
-        $fromId = (int)$edge['from_id'];
-        $toId = (int)$edge['to_id'];
-        $lastId = isset($edge['last_msg_id']) ? (int)$edge['last_msg_id'] : 0;
+    $msgStmt = $pdo->prepare('SELECT from_id, to_id, last_msg_id FROM relationships WHERE deleted_at IS NULL AND (from_id = ? OR to_id = ?)');
+    $msgStmt->execute([(int)$current_user_id, (int)$current_user_id]);
+    $msgRows = $msgStmt->fetchAll();
+    foreach ($msgRows as $row) {
+        $fromId = (int)$row['from_id'];
+        $toId = (int)$row['to_id'];
+        $lastId = isset($row['last_msg_id']) ? (int)$row['last_msg_id'] : 0;
 
         if ($fromId === (int)$current_user_id) {
             $key = (string)$toId;
@@ -157,7 +164,8 @@ try {
         return [
             'source' => (int)$e['from_id'],
             'target' => (int)$e['to_id'],
-            'type'   => $e['type']
+            'type'   => $e['type'],
+            'deleted'=> isset($e['deleted_at']) ? $e['deleted_at'] !== null : false
         ];
     }, $edges);
 
