@@ -160,7 +160,7 @@ function handleSearch(e) {
     } else {
         resultsContainer.innerHTML = hits.map(n => `
             <div class="search-result-item" onclick="window.zoomToUser(${n.id})">
-                ${escapeHtml(n.name)}
+                ${escapeHtml(n.name)} <span style="color: #64748b; font-size: 0.85em; margin-left: 6px;">#${n.id}</span>
             </div>
         `).join('');
     }
