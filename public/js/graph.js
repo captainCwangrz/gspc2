@@ -79,7 +79,7 @@ function buildStarVertexShader() {
             float projSize = size * (1000.0 / -mvPosition.z);
 
             // Fade out very small stars to prevent aliasing flicker (especially when zoomed out)
-            float sizeFade = smoothstep(1.4, 3.2, projSize);
+            float sizeFade = smoothstep(0.6, 1.8, projSize);
 
             gl_Position = projectionMatrix * mvPosition;
             gl_PointSize = clamp(projSize, 0.0, 28.0);
@@ -127,13 +127,11 @@ const STAR_FRAGMENT_SHADER = `
     varying vec3 vColor;
     varying float vOpacity;
     void main() {
-        if (vOpacity < 0.01) discard;
         vec2 xy = gl_PointCoord.xy - vec2(0.5);
         float dist = length(xy);
         float core = smoothstep(0.1, 0.0, dist);
         float halo = smoothstep(0.4, 0.0, dist) * 0.4;
         float alpha = (core + halo);
-        if (alpha < 0.01) discard;
         vec3 boosted = (vColor + vec3(0.12, 0.12, 0.24) * (halo * 2.0)) * (1.12 + halo * 0.12);
         vec3 finalColor = boosted * vOpacity;
         gl_FragColor = vec4(finalColor, alpha * vOpacity);
