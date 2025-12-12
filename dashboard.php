@@ -58,7 +58,8 @@ if (!$currentUser) {
         // Inject configuration from backend
         window.APP_CONFIG = {
             RELATION_TYPES: <?php echo json_encode(RELATION_TYPES); ?>,
-            RELATION_STYLES: <?php echo json_encode(RELATION_STYLES); ?>
+            RELATION_STYLES: <?php echo json_encode(RELATION_STYLES); ?>,
+            DIRECTED_RELATION_TYPES: <?php echo json_encode(DIRECTED_RELATION_TYPES); ?>
         };
     </script>
 </head>

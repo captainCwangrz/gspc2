@@ -114,11 +114,18 @@ export function updateNotificationHUD(nodes = []) {
     }
 
     container.style.display = 'block';
-    list.innerHTML = unreadNodes.map(n => `
-        <div class="unread-item toast info show" onclick="window.openChat(${n.id}, '${encodeURIComponent(n.name)}')" style="cursor:pointer; position: relative; transform: none; margin-bottom: 8px;">
-            New message from <strong>${escapeHtml(n.name)}</strong>
-        </div>
-    `).join('');
+    list.innerHTML = '';
+    unreadNodes.forEach(n => {
+        const div = document.createElement('div');
+        div.className = 'unread-item toast info show';
+        div.style.cursor = 'pointer';
+        div.style.position = 'relative';
+        div.style.transform = 'none';
+        div.style.marginBottom = '8px';
+        div.innerHTML = `New message from <strong>${escapeHtml(n.name)}</strong>`;
+        div.addEventListener('click', () => window.openChat(n.id, n.name));
+        list.appendChild(div);
+    });
     updateHudVisibility();
 }
 
@@ -241,7 +248,7 @@ function sendRequest(toId) {
         .then(res => res.json())
         .then(res => {
             if(res.success) {
-                showToast('Request Sent!');
+                showToast('Request sent. Waiting for acceptance.');
                 if (refreshDataFn) refreshDataFn();
             } else {
                 showToast(res.error || 'Failed to send request', 'error');
@@ -256,7 +263,7 @@ function updateRel(toId) {
         .then(res => res.json())
         .then(res => {
             if(res.success) {
-                showToast('Relationship updated!');
+                showToast('Request sent. Waiting for acceptance.');
                 if (refreshDataFn) refreshDataFn();
             } else {
                 showToast(res.error || 'Failed to update', 'error');
@@ -277,8 +284,8 @@ function removeRel(toId) {
     postData('api/relations.php', { action: 'remove', to_id: toId }).then(() => refreshDataFn && refreshDataFn());
 }
 
-function openChat(userId, encodedName) {
-    const userName = decodeURIComponent(encodedName);
+function openChat(userId, rawName) {
+    const userName = rawName || State.nodeById?.get(userId)?.name || '';
     const chatHud = document.getElementById('chat-hud');
     if (!chatHud) return;
     chatHud.style.pointerEvents = 'auto';

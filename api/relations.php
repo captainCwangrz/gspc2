@@ -32,6 +32,14 @@ function normalizeFromTo(string $type, int $from, int $to): array {
     return [$from < $to ? $from : $to, $from < $to ? $to : $from];
 }
 
+function buildRelWhere(string $type, int $fromId, int $toId): array {
+    if (isDirectedType($type)) {
+        return ['from_id=? AND to_id=?', [$fromId, $toId]];
+    }
+
+    return ['((from_id=? AND to_id=?) OR (from_id=? AND to_id=?))', [$fromId, $toId, $toId, $fromId]];
+}
+
 try {
     // 发起请求
     if ($action === "request") {
@@ -40,17 +48,19 @@ try {
 
         // Use constants for validation
         if ($to_id && in_array($type, RELATION_TYPES) && $to_id !== $user_id) {
-            // 1. 检查是否已有关系 (双向)
-            $checkRel = $pdo->prepare("SELECT id FROM relationships WHERE deleted_at IS NULL AND ((from_id=? AND to_id=?) OR (from_id=? AND to_id=?))");
-            $checkRel->execute([$user_id, $to_id, $to_id, $user_id]);
+            [$relWhere, $relParams] = buildRelWhere($type, $user_id, $to_id);
+
+            // 1. 检查是否已有关系
+            $checkRel = $pdo->prepare("SELECT id FROM relationships WHERE deleted_at IS NULL AND $relWhere");
+            $checkRel->execute($relParams);
             if ($checkRel->fetch()) {
                 echo json_encode(['success' => false, 'error' => 'Relationship already exists']);
                 exit;
             }
 
-            // 2. 检查是否已有 Pending 请求 (双向 - 避免重复或交叉请求)
-            $checkReq = $pdo->prepare("SELECT id FROM requests WHERE ((from_id=? AND to_id=?) OR (from_id=? AND to_id=?)) AND status='PENDING'");
-            $checkReq->execute([$user_id, $to_id, $to_id, $user_id]);
+            // 2. 检查是否已有 Pending 请求
+            $checkReq = $pdo->prepare("SELECT id FROM requests WHERE $relWhere AND status='PENDING'");
+            $checkReq->execute($relParams);
 
             if(!$checkReq->fetch()) {
                 $stmt = $pdo->prepare('INSERT INTO requests (from_id, to_id, type) VALUES (?, ?, ?)');
@@ -70,14 +80,16 @@ try {
         $type = $_POST["type"] ?? "";
 
         if ($to_id && in_array($type, RELATION_TYPES) && $to_id !== $user_id) {
+            [$relWhere, $relParams] = buildRelWhere($type, $user_id, $to_id);
+
             // Check existence
-            $checkRel = $pdo->prepare("SELECT id FROM relationships WHERE deleted_at IS NULL AND ((from_id=? AND to_id=?) OR (from_id=? AND to_id=?))");
-            $checkRel->execute([$user_id, $to_id, $to_id, $user_id]);
+            $checkRel = $pdo->prepare("SELECT id FROM relationships WHERE deleted_at IS NULL AND $relWhere");
+            $checkRel->execute($relParams);
 
             if ($checkRel->fetch()) {
                 // Check if a pending request already exists to avoid spam
-                $checkReq = $pdo->prepare("SELECT id FROM requests WHERE ((from_id=? AND to_id=?) OR (from_id=? AND to_id=?)) AND status='PENDING'");
-                $checkReq->execute([$user_id, $to_id, $to_id, $user_id]);
+                $checkReq = $pdo->prepare("SELECT id FROM requests WHERE $relWhere AND status='PENDING'");
+                $checkReq->execute($relParams);
 
                 if (!$checkReq->fetch()) {
                     $stmt = $pdo->prepare('INSERT INTO requests (from_id, to_id, type) VALUES (?, ?, ?)');
@@ -113,8 +125,9 @@ try {
 
             // 2. Check if relationship exists (for update or new)
             [$normFrom, $normTo] = normalizeFromTo($request['type'], (int)$request['from_id'], (int)$request['to_id']);
-            $checkRel = $pdo->prepare("SELECT id, from_id, to_id, deleted_at FROM relationships WHERE (from_id=? AND to_id=?) OR (from_id=? AND to_id=?) LIMIT 1");
-            $checkRel->execute([$normFrom, $normTo, $normTo, $normFrom]);
+            [$relWhere, $relParams] = buildRelWhere($request['type'], $normFrom, $normTo);
+            $checkRel = $pdo->prepare("SELECT id, from_id, to_id, deleted_at FROM relationships WHERE $relWhere LIMIT 1");
+            $checkRel->execute($relParams);
             $existingRel = $checkRel->fetch();
 
             try {
@@ -153,9 +166,26 @@ try {
     elseif ($action === "remove") {
         $to_id = (int)($_POST["to_id"] ?? 0);
         if ($to_id) {
-            $sql = 'UPDATE relationships SET deleted_at = NOW(6) WHERE deleted_at IS NULL AND ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?))';
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([$user_id, $to_id, $to_id, $user_id]);
+            $fetch = $pdo->prepare('SELECT id, type, from_id, to_id FROM relationships WHERE deleted_at IS NULL AND ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?))');
+            $fetch->execute([$user_id, $to_id, $to_id, $user_id]);
+            $rows = $fetch->fetchAll(PDO::FETCH_ASSOC);
+
+            $idsToDelete = [];
+            foreach ($rows as $row) {
+                if (isDirectedType($row['type'])) {
+                    if ((int)$row['from_id'] === $user_id && (int)$row['to_id'] === $to_id) {
+                        $idsToDelete[] = (int)$row['id'];
+                    }
+                } else {
+                    $idsToDelete[] = (int)$row['id'];
+                }
+            }
+
+            if (!empty($idsToDelete)) {
+                $placeholders = implode(',', array_fill(0, count($idsToDelete), '?'));
+                $del = $pdo->prepare("UPDATE relationships SET deleted_at = NOW(6) WHERE id IN ($placeholders)");
+                $del->execute($idsToDelete);
+            }
             echo json_encode(['success' => true]);
         }
     }

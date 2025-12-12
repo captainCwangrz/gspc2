@@ -26,31 +26,32 @@ $isIncremental = !empty($lastUpdateTime);
 session_write_close(); // Unblock session
 
 function buildStateSnapshot(PDO $pdo, int $current_user_id): array {
-    $usersUpdatedAt = $pdo->query('SELECT MAX(updated_at) FROM users')->fetchColumn();
-    $relsUpdatedAt = $pdo->query('SELECT MAX(updated_at) FROM relationships')->fetchColumn();
-    $relsMaxMsgId = $pdo->query('SELECT MAX(last_msg_id) FROM relationships')->fetchColumn();
-
-    $reqStmt = $pdo->prepare('
-        SELECT MAX(id) as max_req_id, COUNT(*) as req_count
-        FROM requests
-        WHERE to_id = ? AND status = "PENDING"
+    $snapshotStmt = $pdo->prepare('
+        SELECT
+            (SELECT MAX(updated_at) FROM users) as users_updated_at,
+            (SELECT MAX(updated_at) FROM relationships) as rels_updated_at,
+            (SELECT MAX(id) FROM requests WHERE to_id = ? AND status = "PENDING") as max_req_id,
+            (SELECT COUNT(*) FROM requests WHERE to_id = ? AND status = "PENDING") as req_count
     ');
-    $reqStmt->execute([$current_user_id]);
-    $reqState = $reqStmt->fetch(PDO::FETCH_ASSOC);
+    $snapshotStmt->execute([$current_user_id, $current_user_id]);
+    $row = $snapshotStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+
+    $reqState = [
+        'max_req_id' => $row['max_req_id'] ?? null,
+        'req_count' => $row['req_count'] ?? 0
+    ];
 
     $etagParts = [
-        $usersUpdatedAt ?: '0',
-        $relsUpdatedAt ?: '0',
-        $relsMaxMsgId ?: '0',
-        $reqState['max_req_id'],
-        $reqState['req_count'],
+        $row['users_updated_at'] ?: '0',
+        $row['rels_updated_at'] ?: '0',
+        $reqState['max_req_id'] ?? '0',
+        $reqState['req_count'] ?? 0,
         $current_user_id
     ];
 
     return [
-        'users_updated_at' => $usersUpdatedAt,
-        'rels_updated_at'  => $relsUpdatedAt,
-        'rels_max_msg_id'  => $relsMaxMsgId,
+        'users_updated_at' => $row['users_updated_at'] ?? null,
+        'rels_updated_at'  => $row['rels_updated_at'] ?? null,
         'req_state'     => $reqState,
         'etag'          => md5(implode('|', $etagParts)),
     ];
@@ -62,7 +63,6 @@ try {
 
     $stateSnapshot = buildStateSnapshot($pdo, (int)$current_user_id);
     $etag = $stateSnapshot['etag'];
-    $graphState = max($stateSnapshot['users_updated_at'] ?? '0', $stateSnapshot['rels_updated_at'] ?? '0');
 
     if ($waitForChange && $clientEtag) {
         $timeoutSeconds = 20;
@@ -72,7 +72,6 @@ try {
             usleep(500000); // 0.5s
             $stateSnapshot = buildStateSnapshot($pdo, (int)$current_user_id);
             $etag = $stateSnapshot['etag'];
-            $graphState = max($stateSnapshot['users_updated_at'] ?? '0', $stateSnapshot['rels_updated_at'] ?? '0');
         }
 
         if ($etag === $clientEtag) {
