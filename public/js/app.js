@@ -107,6 +107,13 @@ function applyGraphPayload(data) {
 
     if (topologyChanged || State.isFirstLoad) {
         Graph.graphData(State.graphData);
+
+        // FORCE VISUAL REFRESH
+        // Re-assigning the accessor clears the cache and regenerates
+        // the particle beams for the updated relationship types.
+        if (Graph.linkThreeObject) {
+            Graph.linkThreeObject(Graph.linkThreeObject());
+        }
     }
 
     const me = State.graphData.nodes.find(n => n.id === State.userId);
@@ -188,6 +195,11 @@ function mergeGraphData(nodes, links, incremental = false) {
         }
 
         const existing = linkMap.get(key) || {};
+
+        // If type changed (e.g. Request Accepted), flag as topology change
+        if (existing.type !== l.type) {
+            hasTopologyChanges = true;
+        }
         linkMap.set(key, { ...existing, ...l });
     });
 
