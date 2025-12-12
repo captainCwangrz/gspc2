@@ -75,15 +75,24 @@ function buildStarVertexShader() {
         void main() {
             vColor = starColor;
             vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-            // Calculate projected size based on distance
+            // 1. Calculate the theoretical size based on distance
             float projSize = size * (1000.0 / -mvPosition.z);
 
-            // Fade out very small stars to prevent aliasing flicker (especially when zoomed out)
-            // Increase fade thresholds so stars are fully transparent before hardware stops drawing sub-pixel points
-            float sizeFade = smoothstep(1.5, 3.2, projSize);
-
+            // 2. GEOMETRIC FIX: Clamp minimum PointSize to 4.0.
+            // This prevents the "core" (0.1 of diameter) from becoming sub-pixel (< 1px).
+            // If the core is sub-pixel, rasterization snaps it on/off (flickering).
+            // A 4.0px point results in a ~0.8px core, which is stable.
+            gl_PointSize = clamp(projSize, 4.0, 28.0);
+            
             gl_Position = projectionMatrix * mvPosition;
-            gl_PointSize = clamp(projSize, 0.0, 28.0);
+
+            // 3. OPACITY FIX: Adjust fade to match the new clamped geometry.
+            // Since we forced geometry to 4.0, we must fade the star out using Alpha 
+            // before the user notices it's artificially large.
+            // Range 1.8 -> 3.8:
+            // - Below 1.8 theoretical pixels: Fully invisible (0.0 opacity).
+            // - 1.8 to 3.8: Fades in smoothly.
+            float sizeFade = smoothstep(1.8, 3.8, projSize);
             float t = 0.5 + 0.5 * sin(uTime * ${STAR_TWINKLE_SPEED} + phase);
             float eased = t * t * (3.0 - 2.0 * t);
             float sizeFactor = clamp((size - 3.0) / 24.0, 0.0, 1.0);
