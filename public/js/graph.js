@@ -72,6 +72,7 @@ function buildStarVertexShader() {
         attribute float phase;
         varying vec3 vColor;
         varying float vOpacity;
+        varying float vSpriteSize;
         void main() {
             vColor = starColor;
             vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
@@ -83,11 +84,12 @@ function buildStarVertexShader() {
             // If the core is sub-pixel, rasterization snaps it on/off (flickering).
             // A 4.0px point results in a ~0.8px core, which is stable.
             gl_PointSize = clamp(projSize, 4.0, 28.0);
-            
+            vSpriteSize = gl_PointSize;
+
             gl_Position = projectionMatrix * mvPosition;
 
             // 3. OPACITY FIX: Adjust fade to match the new clamped geometry.
-            // Since we forced geometry to 4.0, we must fade the star out using Alpha 
+            // Since we forced geometry to 4.0, we must fade the star out using Alpha
             // before the user notices it's artificially large.
             // Range 1.8 -> 3.8:
             // - Below 1.8 theoretical pixels: Fully invisible (0.0 opacity).
@@ -141,6 +143,28 @@ const STAR_FRAGMENT_SHADER = `
         float dist = length(xy);
         float core = smoothstep(0.1, 0.0, dist);
         float halo = smoothstep(0.4, 0.0, dist) * 0.4;
+        float alpha = (core + halo);
+        vec3 boosted = (vColor + vec3(0.12, 0.12, 0.24) * (halo * 2.0)) * (1.12 + halo * 0.12);
+        vec3 finalColor = boosted * vOpacity;
+        gl_FragColor = vec4(finalColor, alpha * vOpacity);
+    }
+`;
+
+const STAR_ANTI_FLICKER_FRAGMENT_SHADER = `
+    varying vec3 vColor;
+    varying float vOpacity;
+    varying float vSpriteSize;
+
+    void main() {
+        vec2 xy = gl_PointCoord.xy - vec2(0.5);
+        float dist = length(xy);
+
+        float minUvRadius = 0.75 / vSpriteSize;
+        float coreRadius = max(0.1, minUvRadius);
+
+        float core = smoothstep(coreRadius, 0.0, dist);
+        float halo = smoothstep(0.4, 0.0, dist) * 0.4;
+        
         float alpha = (core + halo);
         vec3 boosted = (vColor + vec3(0.12, 0.12, 0.24) * (halo * 2.0)) * (1.12 + halo * 0.12);
         vec3 finalColor = boosted * vOpacity;
@@ -361,7 +385,7 @@ export function initStarfieldBackground() {
                 uTime: { value: 0 }
             },
             vertexShader: buildStarVertexShader(),
-            fragmentShader: STAR_FRAGMENT_SHADER,
+            fragmentShader: STAR_ANTI_FLICKER_FRAGMENT_SHADER,
             transparent: true,
             depthWrite: false,
             depthTest: false,
