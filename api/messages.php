@@ -73,9 +73,12 @@ try {
             $updateStmt = $pdo->prepare(
                 'UPDATE relationships
                  SET last_msg_id = ?, last_msg_time = NOW(), updated_at = NOW()
-                 WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)' 
+                 WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)'
             );
             $updateStmt->execute([$msgId, $user_id, $to_id, $to_id, $user_id]);
+
+            // Advance global cursor so polling clients move forward.
+            updateSystemState($pdo);
 
             $pdo->commit();
             echo json_encode(['success' => true]);
