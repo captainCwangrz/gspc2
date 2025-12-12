@@ -201,16 +201,23 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
                     const vStart = new THREE.Vector3(start.x, start.y, start.z);
                     const vEnd = new THREE.Vector3(end.x, end.y, end.z);
                     const dist = vStart.distanceTo(vEnd);
-                    const dir = vEnd.clone().sub(vStart).normalize();
 
-                    dustContainer.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), dir);
-                    dustContainer.scale.set(1, 1, dist);
+                    if (dist > 0.001) {
+                        const dir = vEnd.clone().sub(vStart).normalize();
 
-                    const points = dustContainer.children.find(c => c.name === 'dust-points');
-                    if (points && points.geometry) {
-                        const density = 2.5;
-                        const count = Math.min(2000, Math.floor(dist * density));
-                        points.geometry.setDrawRange(0, count);
+                        dustContainer.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), dir);
+                        dustContainer.scale.set(1, 1, dist);
+                        dustContainer.visible = true;
+
+                        const points = dustContainer.children.find(c => c.name === 'dust-points');
+                        if (points && points.geometry) {
+                            const density = 2.5;
+                            const count = Math.min(2000, Math.floor(dist * density));
+                            points.geometry.setDrawRange(0, count);
+                        }
+                    } else {
+                        dustContainer.visible = false;
+                        dustContainer.scale.set(0, 0, 0);
                     }
                 }
             }
