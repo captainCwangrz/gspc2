@@ -4,7 +4,15 @@ const STAR_TWINKLE_AMPLITUDE = 0.9;
 const CLOCK_START = performance.now() * 0.001;
 
 const keys = { w: false, a: false, s: false, d: false, shift: false, space: false };
-const MOVE_SPEED = 10;
+const MOVE_SPEED = 30;
+const lookState = {
+    isLooking: false,
+    lastX: 0,
+    lastY: 0,
+    yaw: 0,
+    pitch: 0
+};
+let lastFrame = performance.now();
 
 if (typeof window !== 'undefined') {
     window.addEventListener('keydown', (e) => {
@@ -23,6 +31,72 @@ if (typeof window !== 'undefined') {
             else if (e.key === 'Shift') keys.shift = false;
             else keys[k] = false;
         }
+    });
+}
+
+function syncLookStateWithCamera(camera) {
+    const euler = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ');
+    lookState.yaw = euler.y;
+    lookState.pitch = euler.x;
+}
+
+function updateOrbitTarget(camera, controls) {
+    if (!controls) return;
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
+    controls.target.copy(camera.position).add(forward);
+}
+
+function attachFlyModeControls(controls, camera, domElement) {
+    if (!controls || !camera || !domElement) return;
+
+    controls.enableRotate = false;
+    controls.enablePan = false;
+    controls.enableZoom = true;
+
+    syncLookStateWithCamera(camera);
+    updateOrbitTarget(camera, controls);
+
+    domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    domElement.addEventListener('mousedown', (e) => {
+        if (e.button === 2) {
+            lookState.isLooking = true;
+            lookState.lastX = e.clientX;
+            lookState.lastY = e.clientY;
+            domElement.style.cursor = 'grabbing';
+        }
+    });
+
+    domElement.addEventListener('mouseup', (e) => {
+        if (e.button === 2) {
+            lookState.isLooking = false;
+            domElement.style.cursor = 'default';
+        }
+    });
+
+    domElement.addEventListener('mouseleave', () => {
+        lookState.isLooking = false;
+        domElement.style.cursor = 'default';
+    });
+
+    domElement.addEventListener('mousemove', (e) => {
+        if (!lookState.isLooking) return;
+
+        const deltaX = typeof e.movementX === 'number' ? e.movementX : (e.clientX - lookState.lastX);
+        const deltaY = typeof e.movementY === 'number' ? e.movementY : (e.clientY - lookState.lastY);
+
+        lookState.lastX = e.clientX;
+        lookState.lastY = e.clientY;
+
+        const sensitivity = 0.0025;
+        lookState.yaw -= deltaX * sensitivity;
+        lookState.pitch -= deltaY * sensitivity;
+        const pitchLimit = Math.PI / 2 - 0.05;
+        lookState.pitch = Math.max(-pitchLimit, Math.min(pitchLimit, lookState.pitch));
+
+        const euler = new THREE.Euler(lookState.pitch, lookState.yaw, 0, 'YXZ');
+        camera.quaternion.setFromEuler(euler);
+        updateOrbitTarget(camera, controls);
     });
 }
 
@@ -80,7 +154,9 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
     stateRef = state;
     configRef = config;
 
-    graphRef = ForceGraph3D()(element)
+    graphRef = ForceGraph3D({
+        rendererConfig: { logarithmicDepthBuffer: true }
+    })(element)
         .backgroundColor('#050505')
         .showNavInfo(false)
         .nodeLabel('name')
@@ -141,12 +217,15 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
     }
 
     const controls = graphRef.controls();
+    const camera = graphRef.camera && graphRef.camera();
     if (controls) {
         controls.minDistance = 50;
         controls.maxDistance = 2000;
         controls.enableDamping = true;
         controls.dampingFactor = 0.1;
     }
+
+    attachFlyModeControls(controls, camera, renderer ? renderer.domElement : null);
 
     return graphRef;
 }
@@ -155,22 +234,19 @@ export function animateGraph() {
     if (!graphRef || !stateRef) return;
 
     if (typeof document !== 'undefined' && document.hidden) {
+        lastFrame = performance.now();
         requestAnimationFrame(animateGraph);
         return;
     }
 
+    const now = performance.now();
+    const delta = (now - lastFrame) / 1000;
+    lastFrame = now;
+
     const time = Date.now() * 0.0015;
-    const elapsed = (performance.now() * 0.001) - CLOCK_START;
+    const elapsed = (now * 0.001) - CLOCK_START;
     const opacity = 0.45 + Math.sin(time) * 0.15;
     const scaleMod = 1.0 + Math.sin(time) * 0.05;
-
-    const nodes = (stateRef.graphData && stateRef.graphData.nodes) ? stateRef.graphData.nodes : [];
-    nodes.forEach(n => {
-        if(n.haloSprite) {
-             n.haloSprite.material.opacity = opacity;
-             n.haloSprite.scale.set(60 * scaleMod, 60 * scaleMod, 1);
-        }
-    });
 
     const links = (stateRef.graphData && stateRef.graphData.links) ? stateRef.graphData.links : [];
     links.forEach(link => {
@@ -197,27 +273,25 @@ export function animateGraph() {
         const camera = graphRef.camera();
 
         if (controls && camera) {
-            const dir = new THREE.Vector3();
-            camera.getWorldDirection(dir);
-            dir.y = 0;
-            dir.normalize();
+            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
+            const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
+            const up = camera.up.clone().normalize();
 
-            const right = new THREE.Vector3();
-            right.crossVectors(camera.up, dir).normalize();
-
-            const moveVec = new THREE.Vector3(0,0,0);
-            if (keys.w) moveVec.add(dir);
-            if (keys.s) moveVec.sub(dir);
-            if (keys.a) moveVec.add(right);
-            if (keys.d) moveVec.sub(right);
-            if (keys.space) moveVec.y += 0.5;
-            if (keys.shift) moveVec.y -= 0.5;
+            const moveVec = new THREE.Vector3();
+            if (keys.w) moveVec.add(forward);
+            if (keys.s) moveVec.sub(forward);
+            if (keys.a) moveVec.sub(right);
+            if (keys.d) moveVec.add(right);
+            if (keys.space) moveVec.add(up);
+            if (keys.shift) moveVec.sub(up);
 
             if (moveVec.lengthSq() > 0) {
-                moveVec.normalize().multiplyScalar(MOVE_SPEED);
+                moveVec.normalize().multiplyScalar(MOVE_SPEED * delta);
                 camera.position.add(moveVec);
                 controls.target.add(moveVec);
             }
+
+            updateOrbitTarget(camera, controls);
         }
     }
 
@@ -349,7 +423,7 @@ function createSpaceDust(color) {
 }
 
 function nodeRenderer(node) {
-    const cacheKey = `${node.avatar}|${node.id === stateRef.userId ? 'self' : 'other'}|${(node.name || '').charAt(0).toUpperCase()}`;
+    const cacheKey = `${node.avatar}|${node.id === stateRef.userId ? 'self' : 'other'}|${node.name || ''}`;
     if (!textureCache.has(cacheKey)) {
         const size = 512;
         const canvas = document.createElement('canvas');
@@ -361,20 +435,47 @@ function nodeRenderer(node) {
         const draw = (img = null) => {
             ctx.clearRect(0,0,size,size);
 
-            if(img) {
-                ctx.save();
+            const avatarRadius = size * 0.28;
+            const avatarY = size * 0.35;
+
+            if (node.id === stateRef.userId) {
+                const glowRadius = avatarRadius * 1.8;
+                const glow = ctx.createRadialGradient(size / 2, avatarY, avatarRadius * 0.25, size / 2, avatarY, glowRadius);
+                glow.addColorStop(0, 'rgba(139, 92, 246, 0.45)');
+                glow.addColorStop(1, 'rgba(139, 92, 246, 0)');
+                ctx.fillStyle = glow;
                 ctx.beginPath();
-                ctx.arc(size/2, size/2, size/2, 0, 2 * Math.PI);
-                ctx.clip();
-                ctx.drawImage(img, 0, 0, size, size);
-                ctx.restore();
+                ctx.arc(size / 2, avatarY, glowRadius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(size / 2, avatarY, avatarRadius, 0, 2 * Math.PI);
+            ctx.clip();
+
+            if(img) {
+                ctx.drawImage(img, size / 2 - avatarRadius, avatarY - avatarRadius, avatarRadius * 2, avatarRadius * 2);
             } else {
+                ctx.fillStyle = '#0f172a';
+                ctx.fillRect(size / 2 - avatarRadius, avatarY - avatarRadius, avatarRadius * 2, avatarRadius * 2);
                 ctx.fillStyle = 'white';
-                ctx.font = 'bold 240px "Orbitron", sans-serif';
+                ctx.font = 'bold 220px "Orbitron", sans-serif';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText((node.name || '').charAt(0).toUpperCase(), size/2, size/2);
+                ctx.fillText((node.name || '').charAt(0).toUpperCase(), size / 2, avatarY);
             }
+            ctx.restore();
+
+            const name = (node.name || '').trim();
+            ctx.font = 'bold 72px "Orbitron", "Noto Sans SC", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = 'white';
+            ctx.shadowColor = 'rgba(0,0,0,0.65)';
+            ctx.shadowBlur = 12;
+            ctx.fillText(name, size / 2, size * 0.78, size * 0.9);
+            ctx.shadowBlur = 0;
 
             texture.needsUpdate = true;
             texture.minFilter = THREE.LinearMipmapLinearFilter;
@@ -393,65 +494,17 @@ function nodeRenderer(node) {
     }
 
     const texture = textureCache.get(cacheKey);
-    const material = new THREE.SpriteMaterial({ map: texture });
+    const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    material.depthWrite = false;
     const sprite = new THREE.Sprite(material);
-    sprite.scale.set(16, 16, 1);
+    sprite.scale.set(18, 18, 1);
     sprite.renderOrder = 10;
 
     node.dispose = () => {
         if(material) material.dispose();
-        if(node.haloTexture) node.haloTexture.dispose();
-        if(node.haloMaterial) node.haloMaterial.dispose();
     };
 
-    const group = new THREE.Group();
-
-    if (node.id === stateRef.userId) {
-        const haloCanvas = document.createElement('canvas');
-        haloCanvas.width = 64;
-        haloCanvas.height = 64;
-        const hCtx = haloCanvas.getContext('2d');
-
-        const grad = hCtx.createRadialGradient(32,32,0,32,32,32);
-        grad.addColorStop(0, 'rgba(139, 92, 246, 0.8)');
-        grad.addColorStop(0.5, 'rgba(139, 92, 246, 0.3)');
-        grad.addColorStop(1, 'rgba(139, 92, 246, 0)');
-
-        hCtx.fillStyle = grad;
-        hCtx.fillRect(0,0,64,64);
-
-        const haloTex = new THREE.CanvasTexture(haloCanvas);
-        const haloMat = new THREE.SpriteMaterial({
-            map: haloTex,
-            transparent: true,
-            opacity: 0.5,
-            depthWrite: false
-        });
-        const haloSprite = new THREE.Sprite(haloMat);
-
-        haloSprite.scale.set(50, 50, 1);
-        haloSprite.renderOrder = 1;
-
-        group.add(haloSprite);
-
-        node.haloSprite = haloSprite;
-        node.haloTexture = haloTex;
-        node.haloMaterial = haloMat;
-    }
-
-    group.add(sprite);
-
-    const nameSprite = new SpriteText(node.name);
-    nameSprite.color = 'white';
-    nameSprite.fontFace = '"Orbitron", "Noto Sans SC", sans-serif';
-    nameSprite.textHeight = 2.5;
-    nameSprite.backgroundColor = null;
-    nameSprite.center.set(0.5, 1);
-    nameSprite.position.y = -9;
-    if (nameSprite.material) nameSprite.material.depthWrite = false;
-    group.add(nameSprite);
-
-    return group;
+    return sprite;
 }
 
 function linkRenderer(link) {
