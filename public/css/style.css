@@ -5,22 +5,6 @@ body { margin: 0; overflow: hidden; font-family: 'Orbitron', 'Noto Sans SC', 'Se
 
 input, button, select, textarea { font-family: inherit; }
 
-#controls-overlay {
-    position: fixed;
-    left: 20px;
-    bottom: 20px;
-    padding: 10px 14px;
-    background: rgba(15, 23, 42, 0.65);
-    color: #e2e8f0;
-    border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-    font-size: 0.9rem;
-    letter-spacing: 0.02em;
-    pointer-events: none;
-    z-index: 12;
-}
-
 /* HUD Common */
 .hud-panel {
     position: absolute;
