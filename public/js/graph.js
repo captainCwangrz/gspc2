@@ -2,7 +2,7 @@ const STAR_TWINKLE_SPEED = 2.8;
 const BACKGROUND_ROTATION_SPEED = 0.01;
 const STAR_TWINKLE_AMPLITUDE = 0.9;
 const CLOCK_START = performance.now() * 0.001;
-const CAMERA_MOVE_SPEED = 30;
+const CAMERA_MOVE_SPEED = 60;
 
 let stateRef;
 let configRef;
@@ -79,10 +79,10 @@ function buildStarVertexShader() {
             float projSize = size * (1000.0 / -mvPosition.z);
 
             // Fade out very small stars to prevent aliasing flicker
-            float sizeFade = smoothstep(0.3, 1.8, projSize);
+            float sizeFade = (projSize < 0.9) ? 0.0 : smoothstep(1.2, 2.6, projSize);
 
             gl_Position = projectionMatrix * mvPosition;
-            gl_PointSize = max(2.0, projSize);
+            gl_PointSize = max(3.0, projSize);
             float t = 0.5 + 0.5 * sin(uTime * ${STAR_TWINKLE_SPEED} + phase);
             float eased = t * t * (3.0 - 2.0 * t);
             float sizeFactor = clamp((size - 3.0) / 24.0, 0.0, 1.0);
@@ -405,10 +405,10 @@ function nodeRenderer(node) {
             ctx.clearRect(0,0,size,size);
 
             const avatarRadius = size * 0.28;
-            const avatarY = size * 0.35;
+            const avatarY = size * 0.45;
 
             if (node.id === stateRef.userId) {
-                const glowRadius = avatarRadius * 1.8;
+                const glowRadius = avatarRadius * 1.6;
                 const glow = ctx.createRadialGradient(size / 2, avatarY, avatarRadius * 0.25, size / 2, avatarY, glowRadius);
                 glow.addColorStop(0, 'rgba(139, 92, 246, 0.45)');
                 glow.addColorStop(1, 'rgba(139, 92, 246, 0)');
