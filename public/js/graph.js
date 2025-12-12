@@ -219,7 +219,7 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
     const controls = graphRef.controls();
     const camera = graphRef.camera && graphRef.camera();
     if (controls) {
-        controls.minDistance = 50;
+        controls.minDistance = 0;
         controls.maxDistance = 2000;
         controls.enableDamping = true;
         controls.dampingFactor = 0.1;
