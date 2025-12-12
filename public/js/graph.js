@@ -3,6 +3,29 @@ const BACKGROUND_ROTATION_SPEED = 0.01;
 const STAR_TWINKLE_AMPLITUDE = 0.9;
 const CLOCK_START = performance.now() * 0.001;
 
+const keys = { w: false, a: false, s: false, d: false, shift: false, space: false };
+const MOVE_SPEED = 10;
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('keydown', (e) => {
+        const k = e.key.toLowerCase();
+        if (keys.hasOwnProperty(k) || e.key === ' ' || e.key === 'Shift') {
+            if (e.key === ' ') keys.space = true;
+            else if (e.key === 'Shift') keys.shift = true;
+            else keys[k] = true;
+        }
+    });
+
+    window.addEventListener('keyup', (e) => {
+        const k = e.key.toLowerCase();
+        if (keys.hasOwnProperty(k) || e.key === ' ' || e.key === 'Shift') {
+            if (e.key === ' ') keys.space = false;
+            else if (e.key === 'Shift') keys.shift = false;
+            else keys[k] = false;
+        }
+    });
+}
+
 let stateRef;
 let configRef;
 let graphRef = null;
@@ -26,7 +49,7 @@ function buildStarVertexShader() {
             float sizeFade = smoothstep(0.3, 1.8, projSize);
 
             gl_Position = projectionMatrix * mvPosition;
-            gl_PointSize = max(1.35, projSize);
+            gl_PointSize = max(2.0, projSize);
             float t = 0.5 + 0.5 * sin(uTime * ${STAR_TWINKLE_SPEED} + phase);
             float eased = t * t * (3.0 - 2.0 * t);
             float sizeFactor = clamp((size - 3.0) / 24.0, 0.0, 1.0);
@@ -62,7 +85,8 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
         .showNavInfo(false)
         .nodeLabel('name')
         .nodeThreeObject(nodeRenderer)
-        .linkWidth(link => link === stateRef.highlightLink ? 2 : 1)
+        .linkWidth(link => link === stateRef.highlightLink ? 3.5 : 1.5)
+        .linkOpacity(0.6)
         .linkColor(() => 'rgba(0,0,0,0)')
         .linkDirectionalParticles(0)
         .linkThreeObjectExtend(true)
@@ -102,12 +126,12 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
     // 1. Increase Repulsion (Charge)
     // Default is usually around -30. Making it more negative (-150)
     // pushes nodes apart more aggressively, expanding the whole cluster.
-    graphRef.d3Force('charge').strength(-150);
+    graphRef.d3Force('charge').strength(-220);
 
     // 2. Increase Link Distance
     // Default is usually around 30. Increasing this (e.g., to 80 or 100)
     // makes the "strings" connecting nodes longer.
-    graphRef.d3Force('link').distance(100);
+    graphRef.d3Force('link').distance(130);
 
     // ---------------------------------------------------------
 
@@ -168,6 +192,35 @@ export function animateGraph() {
         }
     }
 
+    if (graphRef) {
+        const controls = graphRef.controls();
+        const camera = graphRef.camera();
+
+        if (controls && camera) {
+            const dir = new THREE.Vector3();
+            camera.getWorldDirection(dir);
+            dir.y = 0;
+            dir.normalize();
+
+            const right = new THREE.Vector3();
+            right.crossVectors(camera.up, dir).normalize();
+
+            const moveVec = new THREE.Vector3(0,0,0);
+            if (keys.w) moveVec.add(dir);
+            if (keys.s) moveVec.sub(dir);
+            if (keys.a) moveVec.add(right);
+            if (keys.d) moveVec.sub(right);
+            if (keys.space) moveVec.y += 0.5;
+            if (keys.shift) moveVec.y -= 0.5;
+
+            if (moveVec.lengthSq() > 0) {
+                moveVec.normalize().multiplyScalar(MOVE_SPEED);
+                camera.position.add(moveVec);
+                controls.target.add(moveVec);
+            }
+        }
+    }
+
     requestAnimationFrame(animateGraph);
 }
 
@@ -188,7 +241,7 @@ export function initStarfieldBackground() {
         const phases = [];
 
         for(let i=0; i<starCount; i++) {
-            const r = 900 * Math.pow(Math.random(), 0.65) + 120;
+            const r = 2500 * Math.random() + 800;
             const theta = Math.random() * Math.PI * 2;
             const phi = Math.acos(2 * Math.random() - 1);
             const x = r * Math.sin(phi) * Math.cos(theta);
@@ -210,7 +263,7 @@ export function initStarfieldBackground() {
             colors.push(baseColor.r, baseColor.g, baseColor.b);
 
             const rand = Math.random();
-            const size = 1.2 + Math.pow(rand, 2.5) * 13.2;
+            const size = (4.0 + Math.pow(rand, 3.0) * 20.0);
             sizes.push(size);
 
             phases.push(Math.random() * Math.PI * 2);
