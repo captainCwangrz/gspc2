@@ -265,7 +265,7 @@ function mergeGraphData(nodes, links, incremental = false) {
     directedBuckets.forEach((linksForPair) => {
         if (linksForPair.length < 2) {
             linksForPair.forEach(l => {
-                l.displayLabel = `${l.type} →`;
+                l.displayLabel = `${getRelLabel(l.type)} →`;
                 l.hideLabel = false;
             });
             return;
@@ -283,25 +283,25 @@ function mergeGraphData(nodes, links, incremental = false) {
         });
 
         if (forward && backward && forward.type === backward.type && forward.type === 'CRUSH') {
-            forward.displayLabel = `${forward.type} ↔`;
+            forward.displayLabel = `${getRelLabel(forward.type)} ↔`;
             forward.hideLabel = false;
-            backward.displayLabel = `${backward.type} ↔`;
+            backward.displayLabel = `${getRelLabel(backward.type)} ↔`;
             backward.hideLabel = true;
             return;
         }
 
         linksForPair.forEach(l => {
-            l.displayLabel = `${l.type} →`;
+            l.displayLabel = `${getRelLabel(l.type)} →`;
             l.hideLabel = false;
         });
     });
 
     linksArray.forEach(link => {
         if (!isDirected(link.type)) {
-            link.displayLabel = link.type;
+            link.displayLabel = getRelLabel(link.type);
             link.hideLabel = false;
         } else if (!link.displayLabel) {
-            link.displayLabel = `${link.type} →`;
+            link.displayLabel = `${getRelLabel(link.type)} →`;
             link.hideLabel = false;
         }
     });
