@@ -91,6 +91,9 @@ try {
 
     // --- Full Data Fetch (Only if Changed) ---
 
+    $relUpdate = $stateSnapshot['rel_updated_at'] ?? '0000-00-00 00:00:00';
+    $clientNextCursor = ($relUpdate > $graphState) ? $relUpdate : $graphState;
+
     // 1. Get nodes (incremental if last_update provided)
     if ($isIncremental) {
         $stmt = $pdo->prepare('SELECT id, username, real_name, avatar, signature FROM users WHERE updated_at > ?');
@@ -164,7 +167,7 @@ try {
         'last_messages' => $lastMessages,
         'requests' => $requests,
         'current_user_id' => (int)$current_user_id,
-        'last_update' => $graphState,
+        'last_update' => $clientNextCursor,
         'incremental' => $isIncremental
     ]);
 
