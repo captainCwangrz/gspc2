@@ -2,9 +2,7 @@ const STAR_TWINKLE_SPEED = 2.8;
 const BACKGROUND_ROTATION_SPEED = 0.01;
 const STAR_TWINKLE_AMPLITUDE = 0.9;
 const CLOCK_START = performance.now() * 0.001;
-const CAMERA_MOVE_SPEED = 240;
-
-let isOrbitRotating = false;
+const CAMERA_MOVE_SPEED = 120;
 
 let stateRef;
 let configRef;
@@ -187,25 +185,6 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
         controls.enablePan = true;
         controls.enableRotate = true;
         controls.enableZoom = true;
-        controls.zoomSpeed = 0.75;
-        controls.zoomToCursor = true;
-
-        const domElement = controls.domElement;
-        if (domElement) {
-            const onPointerDown = (event) => {
-                if (event.button === 0) {
-                    isOrbitRotating = true;
-                }
-            };
-            const endPointer = () => {
-                isOrbitRotating = false;
-            };
-
-            domElement.addEventListener('pointerdown', onPointerDown);
-            domElement.addEventListener('pointerup', endPointer);
-            domElement.addEventListener('pointerleave', endPointer);
-            controls.addEventListener('end', endPointer);
-        }
     }
 
     setupMovementHandlers();
@@ -274,7 +253,7 @@ export function animateGraph() {
             if (pressedKeys.d) movement.add(right);
             if (pressedKeys.a) movement.sub(right);
 
-            if (!isOrbitRotating && movement.lengthSq() > 0 && deltaSeconds > 0) {
+            if (movement.lengthSq() > 0 && deltaSeconds > 0) {
                 movement.normalize().multiplyScalar(CAMERA_MOVE_SPEED * deltaSeconds);
                 camera.position.add(movement);
                 controls.target.add(movement);
@@ -509,7 +488,6 @@ function linkRenderer(link) {
 
         const dustContainer = new THREE.Group();
         dustContainer.name = 'dust-container';
-        dustContainer.frustumCulled = false;
         dustContainer.add(dust);
         group.add(dustContainer);
 
@@ -524,10 +502,7 @@ function linkRenderer(link) {
     sprite.backgroundColor = 'rgba(0,0,0,0)';
     sprite.padding = 2;
     if(sprite.material) sprite.material.depthWrite = false;
-    sprite.frustumCulled = false;
     group.add(sprite);
-
-    group.frustumCulled = false;
 
     return group;
 }
