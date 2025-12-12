@@ -1,5 +1,5 @@
 import { fetchGraphData, syncReadReceipts } from './api.js';
-import { createGraph, animateGraph, initStarfieldBackground } from './graph.js';
+import { createGraph, animateGraph, initStarfieldBackground, disposeLinkVisual } from './graph.js';
 import { initUI, updateRequestsUI, updateNotificationHUD, showToast, escapeHtml } from './ui.js';
 
 if (!window.APP_CONFIG) {
@@ -204,9 +204,18 @@ function mergeGraphData(nodes, links, incremental = false) {
         if (l.deleted === true) {
             const s = typeof l.source === 'object' ? l.source.id : l.source;
             const t = typeof l.target === 'object' ? l.target.id : l.target;
+            const existing = linkMap.get(key);
+            if (existing) {
+                disposeLinkVisual(existing);
+            }
+
             linkMap.delete(key);
             if (!isDirected(l.type)) {
                 const reverseKey = `${t}-${s}`;
+                const reverseExisting = linkMap.get(reverseKey);
+                if (reverseExisting) {
+                    disposeLinkVisual(reverseExisting);
+                }
                 linkMap.delete(reverseKey);
             }
             hasTopologyChanges = true;
@@ -222,10 +231,7 @@ function mergeGraphData(nodes, links, incremental = false) {
         if (existing.type !== l.type) {
             hasTopologyChanges = true;
 
-            // Remove cached particle references so the renderer builds
-            // fresh assets for the new relationship type.
-            delete existing.__dust;
-            delete existing.__dustMat;
+            disposeLinkVisual(existing);
         }
 
         const merged = { ...existing, ...l };
@@ -429,12 +435,17 @@ function showNodeInspector(node) {
         const outgoing = links.find(l => {
             const sId = typeof l.source === 'object' ? l.source.id : l.source;
             const tId = typeof l.target === 'object' ? l.target.id : l.target;
-            return sId === State.userId && tId === node.id;
+            return sId === State.userId && tId === node.id && isDirected(l.type);
         });
         const incoming = links.find(l => {
             const sId = typeof l.source === 'object' ? l.source.id : l.source;
             const tId = typeof l.target === 'object' ? l.target.id : l.target;
-            return sId === node.id && tId === State.userId;
+            return sId === node.id && tId === State.userId && isDirected(l.type);
+        });
+        const undirected = links.find(l => {
+            const sId = typeof l.source === 'object' ? l.source.id : l.source;
+            const tId = typeof l.target === 'object' ? l.target.id : l.target;
+            return !isDirected(l.type) && ((sId === State.userId && tId === node.id) || (sId === node.id && tId === State.userId));
         });
 
         const mutualCrush = outgoing && incoming && outgoing.type === 'CRUSH' && incoming.type === 'CRUSH';
@@ -463,7 +474,7 @@ function showNodeInspector(node) {
             statusHtml += `<div style="margin-top:6px; color:#f472b6; font-weight:bold;">💞 Mutual Crush</div>`;
         }
 
-        const activeRel = outgoing || incoming;
+        const activeRel = outgoing || undirected;
         if (activeRel && !statusHtml) {
             const style = CONFIG.relStyles[activeRel.type] || { color: '#fff' };
             statusHtml = `<div style="color:${style.color}">${activeRel.type}</div>`;
@@ -497,7 +508,8 @@ function showNodeInspector(node) {
                 `;
             }
 
-            const options = RELATION_TYPES.map(t => `<option value="${t}">Request ${t}</option>`).join('');
+            const preferredType = incoming && incoming.type === 'CRUSH' ? 'CRUSH' : null;
+            const options = RELATION_TYPES.map(t => `<option value="${t}" ${preferredType === t ? 'selected' : ''}>Request ${t}</option>`).join('');
             actionHtml += `
                 <select id="req-type" style="width:100%; padding:8px; margin-top:10px; background:#1e293b; color:white; border:1px solid #475569; border-radius:4px;">
                     ${options}
