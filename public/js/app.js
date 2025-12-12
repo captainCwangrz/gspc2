@@ -12,6 +12,8 @@ const CONFIG = window.APP_CONFIG ? {
 } : null;
 
 const RELATION_TYPES = window.APP_CONFIG ? (window.APP_CONFIG.RELATION_TYPES || []) : [];
+const DIRECTED_RELATION_TYPES = window.APP_CONFIG?.DIRECTED_RELATION_TYPES || [];
+const isDirected = (type) => DIRECTED_RELATION_TYPES.includes(type);
 
 export const State = {
     userId: null,
@@ -23,7 +25,8 @@ export const State = {
     isFirstLoad: true,
     etag: null,
     activeChats: new Set(),
-    lastUpdate: null
+    lastUpdate: null,
+    nodeById: new Map()
 };
 
 let Graph = null;
@@ -182,6 +185,7 @@ function mergeGraphData(nodes, links, incremental = false) {
     });
 
     State.graphData.nodes = Array.from(nodeMap.values());
+    State.nodeById = new Map(State.graphData.nodes.map(n => [n.id, n]));
 
     const linkKey = (l) => {
         const s = typeof l.source === 'object' ? l.source.id : l.source;
@@ -201,8 +205,10 @@ function mergeGraphData(nodes, links, incremental = false) {
             const s = typeof l.source === 'object' ? l.source.id : l.source;
             const t = typeof l.target === 'object' ? l.target.id : l.target;
             linkMap.delete(key);
-            const reverseKey = `${t}-${s}`;
-            linkMap.delete(reverseKey);
+            if (!isDirected(l.type)) {
+                const reverseKey = `${t}-${s}`;
+                linkMap.delete(reverseKey);
+            }
             hasTopologyChanges = true;
             return;
         }
@@ -234,47 +240,91 @@ function mergeGraphData(nodes, links, incremental = false) {
         linkMap.set(key, merged);
     });
 
-    State.graphData.links = Array.from(linkMap.values());
+    const linksArray = Array.from(linkMap.values());
+
+    const pairKey = (a, b) => `${Math.min(a, b)}-${Math.max(a, b)}`;
+    const directedBuckets = new Map();
+
+    linksArray.forEach(link => {
+        const sId = typeof link.source === 'object' ? link.source.id : link.source;
+        const tId = typeof link.target === 'object' ? link.target.id : link.target;
+
+        if (isDirected(link.type)) {
+            const key = pairKey(sId, tId);
+            if (!directedBuckets.has(key)) directedBuckets.set(key, []);
+            directedBuckets.get(key).push(link);
+        }
+    });
+
+    directedBuckets.forEach((linksForPair) => {
+        if (linksForPair.length < 2) {
+            linksForPair.forEach(l => {
+                l.displayLabel = `${l.type} →`;
+                l.hideLabel = false;
+            });
+            return;
+        }
+
+        const forward = linksForPair.find(l => {
+            const sId = typeof l.source === 'object' ? l.source.id : l.source;
+            const tId = typeof l.target === 'object' ? l.target.id : l.target;
+            return sId < tId;
+        });
+        const backward = linksForPair.find(l => {
+            const sId = typeof l.source === 'object' ? l.source.id : l.source;
+            const tId = typeof l.target === 'object' ? l.target.id : l.target;
+            return sId > tId;
+        });
+
+        if (forward && backward && forward.type === backward.type && forward.type === 'CRUSH') {
+            forward.displayLabel = `${forward.type} ↔`;
+            forward.hideLabel = false;
+            backward.displayLabel = `${backward.type} ↔`;
+            backward.hideLabel = true;
+            return;
+        }
+
+        linksForPair.forEach(l => {
+            l.displayLabel = `${l.type} →`;
+            l.hideLabel = false;
+        });
+    });
+
+    linksArray.forEach(link => {
+        if (!isDirected(link.type)) {
+            link.displayLabel = link.type;
+            link.hideLabel = false;
+        } else if (!link.displayLabel) {
+            link.displayLabel = `${link.type} →`;
+            link.hideLabel = false;
+        }
+    });
+
+    State.graphData.links = linksArray;
 
     return hasTopologyChanges;
 }
 
 function applyLastMessages(lastMessages) {
-    // 遍历所有节点（注意：这里遍历的是本地的全量节点 State.graphData.nodes）
-    State.graphData.nodes.forEach(node => {
-        const keyName = String(node.id);
-        
-        // 1. 获取后端传来的最新消息 ID
-        let serverLastMsgId = 0;
-        if (Object.prototype.hasOwnProperty.call(lastMessages, keyName)) {
-            serverLastMsgId = parseInt(lastMessages[keyName]);
-        }
+    Object.keys(lastMessages).forEach(keyName => {
+        const nodeId = parseInt(keyName);
+        const node = State.nodeById.get(nodeId);
+        if (!node) return;
 
-        // 如果没有消息变动，直接跳过（性能优化）
-        if (serverLastMsgId <= (node.last_msg_id || 0)) {
-            return; 
-        }
+        const serverLastMsgId = parseInt(lastMessages[keyName]);
+        if (serverLastMsgId <= (node.last_msg_id || 0)) return;
 
-        // 更新本地节点状态
         node.last_msg_id = serverLastMsgId;
 
-        // 2. 核心逻辑：判断是“刷新聊天”还是“显示通知”
         const readKey = `read_msg_id_${State.userId}_${node.id}`;
         const localReadId = parseInt(localStorage.getItem(readKey) || '0');
 
-        // 只有当服务器消息 ID 大于本地已读 ID 时，才算“新消息”
         if (serverLastMsgId > localReadId) {
-            
-            // A. 如果聊天窗口是打开的 -> 自动刷新消息
             if (State.activeChats.has(node.id)) {
-                // 调用 UI 层的加载消息函数（它会自动追加新消息）
                 if (window.loadMsgs) {
                     window.loadMsgs(node.id);
                 }
-            } 
-            // B. 如果聊天窗口没打开 -> 弹 Toast 通知
-            else {
-                // 使用 sessionStorage 防止同一个消息 ID 重复弹窗
+            } else {
                 const toastKey = `last_toasted_msg_${State.userId}_${node.id}`;
                 const lastToastedId = parseInt(sessionStorage.getItem(toastKey) || '0');
 
@@ -283,15 +333,14 @@ function applyLastMessages(lastMessages) {
                         window.showToast(
                             `New message from ${node.name}`,
                             'info',
-                            3000, // 3秒自动消失
-                            () => window.openChat(node.id, encodeURIComponent(node.name)), // 点击打开聊天
+                            3000,
+                            () => window.openChat(node.id, node.name),
                             { userId: node.id }
                         );
                     }
                     sessionStorage.setItem(toastKey, serverLastMsgId);
                 }
-                
-                // 标记为通知待处理，供 HUD 列表使用
+
                 node.hasActiveNotification = true;
             }
         }
@@ -374,41 +423,77 @@ function showNodeInspector(node) {
     }).length;
 
     let actionHtml = '';
+    let statusHtml = '';
 
     if(node.id !== State.userId) {
-        const myRel = links.find(l => {
+        const outgoing = links.find(l => {
             const sId = typeof l.source === 'object' ? l.source.id : l.source;
             const tId = typeof l.target === 'object' ? l.target.id : l.target;
-            return (sId === node.id && tId === State.userId) ||
-                   (tId === node.id && sId === State.userId);
+            return sId === State.userId && tId === node.id;
         });
-        const safeName = encodeURIComponent(node.name);
+        const incoming = links.find(l => {
+            const sId = typeof l.source === 'object' ? l.source.id : l.source;
+            const tId = typeof l.target === 'object' ? l.target.id : l.target;
+            return sId === node.id && tId === State.userId;
+        });
 
-        if(myRel) {
-            const style = CONFIG.relStyles[myRel.type] || { color: '#fff' };
+        const mutualCrush = outgoing && incoming && outgoing.type === 'CRUSH' && incoming.type === 'CRUSH';
+
+        if (outgoing) {
+            const style = CONFIG.relStyles[outgoing.type] || { color: '#fff' };
+            if (isDirected(outgoing.type)) {
+                statusHtml += `<div style="color:${style.color}">You → ${escapeHtml(node.name)}: ${outgoing.type}</div>`;
+            } else {
+                statusHtml += `<div style="color:${style.color}">${outgoing.type}</div>`;
+            }
+        }
+
+        if (incoming) {
+            const style = CONFIG.relStyles[incoming.type] || { color: '#fff' };
+            if (isDirected(incoming.type)) {
+                statusHtml += `<div style="color:${style.color}">${escapeHtml(node.name)} → You: ${incoming.type}</div>`;
+            }
+        }
+
+        if (!outgoing && !incoming && node.last_msg_id > 0) {
+            statusHtml += `<div style="color:#94a3b8">History available</div>`;
+        }
+
+        if (mutualCrush) {
+            statusHtml += `<div style="margin-top:6px; color:#f472b6; font-weight:bold;">💞 Mutual Crush</div>`;
+        }
+
+        const activeRel = outgoing || incoming;
+        if (activeRel && !statusHtml) {
+            const style = CONFIG.relStyles[activeRel.type] || { color: '#fff' };
+            statusHtml = `<div style="color:${style.color}">${activeRel.type}</div>`;
+        }
+
+        if(activeRel) {
+            const style = CONFIG.relStyles[activeRel.type] || { color: '#fff' };
             const options = RELATION_TYPES.map(t =>
-                `<option value="${t}" ${myRel.type === t ? 'selected' : ''}>${t}</option>`
+                `<option value="${t}" ${activeRel.type === t ? 'selected' : ''}>${t}</option>`
             ).join('');
 
             actionHtml = `
                 <div style="margin-top:10px; padding:8px; background:rgba(255,255,255,0.1); border-radius:4px; text-align:center;">
-                    Status: <strong style="color:${style.color}">${myRel.type}</strong>
+                    ${statusHtml || 'Connected'}
                 </div>
 
                 <div style="margin-top:8px;">
                      <select id="update-rel-type" style="width:70%; padding:6px; background:#1e293b; color:white; border:1px solid #475569; border-radius:4px;">
                         ${options}
                     </select>
-                    <button class="action-btn" style="width:25%; display:inline-block;" onclick="window.updateRel(${node.id})">Update</button>
+                    <button class="action-btn" style="width:25%; display:inline-block;" data-action="update-rel" data-user-id="${node.id}">Update</button>
                 </div>
 
-                <button class="action-btn" onclick="window.openChat(${node.id}, '${safeName}')">💬 Message</button>
-                <button class="action-btn" style="background:#ef4444; margin-top:8px;" onclick="window.removeRel(${node.id})">💔 Remove</button>
+                <button class="action-btn" data-action="open-chat" data-user-id="${node.id}">💬 Message</button>
+                <button class="action-btn" style="background:#ef4444; margin-top:8px;" data-action="remove-rel" data-user-id="${node.id}">💔 Remove</button>
             `;
         } else {
             if (node.last_msg_id > 0) {
                  actionHtml += `
-                    <button class="action-btn" style="background:#64748b; margin-bottom:8px;" onclick="window.openChat(${node.id}, '${safeName}')">📜 History</button>
+                    <button class="action-btn" style="background:#64748b; margin-bottom:8px;" data-action="open-chat" data-user-id="${node.id}">📜 History</button>
                 `;
             }
 
@@ -417,7 +502,7 @@ function showNodeInspector(node) {
                 <select id="req-type" style="width:100%; padding:8px; margin-top:10px; background:#1e293b; color:white; border:1px solid #475569; border-radius:4px;">
                     ${options}
                 </select>
-                <button class="action-btn" onclick="window.sendRequest(${node.id})">🚀 Send Request</button>
+                <button class="action-btn" data-action="send-request" data-user-id="${node.id}">🚀 Send Request</button>
             `;
         }
     }
@@ -435,6 +520,23 @@ function showNodeInspector(node) {
         </div>
         ${actionHtml}
     `;
+
+    const actionButtons = dataDiv.querySelectorAll('[data-action]');
+    actionButtons.forEach(btn => {
+        const targetId = parseInt(btn.getAttribute('data-user-id'));
+        if (btn.dataset.action === 'open-chat') {
+            btn.addEventListener('click', () => window.openChat(targetId, node.name));
+        }
+        if (btn.dataset.action === 'remove-rel') {
+            btn.addEventListener('click', () => window.removeRel(targetId));
+        }
+        if (btn.dataset.action === 'send-request') {
+            btn.addEventListener('click', () => window.sendRequest(targetId));
+        }
+        if (btn.dataset.action === 'update-rel') {
+            btn.addEventListener('click', () => window.updateRel(targetId));
+        }
+    });
 }
 
 function showLinkInspector(link) {
@@ -444,19 +546,25 @@ function showLinkInspector(link) {
 
     const style = CONFIG.relStyles[link.type];
 
+    const sourceName = escapeHtml(link.source.name);
+    const targetName = escapeHtml(link.target.name);
+    const isMutualCrush = link.displayLabel && link.displayLabel.includes('↔');
+    const directionLabel = isDirected(link.type) ? (isMutualCrush ? '↔' : '→') : '—';
+
     dataDiv.innerHTML = `
         <div class="inspector-title" style="color:${style.color}; text-align:center; font-weight:bold; font-size:1.2em;">${style.label}</div>
         <div style="display:flex; justify-content:space-around; align-items:center; margin: 20px 0;">
             <div style="text-align:center">
                 <img src="${link.source.avatar}" style="width:40px; height:40px; border-radius:50%;">
-                <div style="font-size:0.8em;">${escapeHtml(link.source.name)}</div>
+                <div style="font-size:0.8em;">${sourceName}</div>
             </div>
-            <div style="font-size:1.5em; opacity:0.5;">↔️</div>
+            <div style="font-size:1.5em; opacity:0.5;">${directionLabel}</div>
             <div style="text-align:center">
                 <img src="${link.target.avatar}" style="width:40px; height:40px; border-radius:50%;">
-                <div style="font-size:0.8em;">${escapeHtml(link.target.name)}</div>
+                <div style="font-size:0.8em;">${targetName}</div>
             </div>
         </div>
+        ${isMutualCrush ? '<div style="text-align:center; color:#f472b6; font-weight:bold;">💞 Mutual Crush</div>' : ''}
     `;
 }
 

@@ -571,13 +571,14 @@ function linkRenderer(link) {
         link.__dustMat = dust.material;
     }
 
-    const sprite = new SpriteText(style ? style.label : link.type);
+    const sprite = new SpriteText(link.displayLabel || (style ? style.label : link.type));
     sprite.fontFace = '"Fredoka", "Varela Round", sans-serif';
     sprite.color = style ? style.color : 'lightgrey';
     sprite.textHeight = 4.5;
     sprite.backgroundColor = 'rgba(0,0,0,0)';
     sprite.padding = 2;
     if(sprite.material) sprite.material.depthWrite = false;
+    sprite.visible = link.hideLabel ? false : true;
     group.add(sprite);
 
     return group;

@@ -32,8 +32,14 @@ if (empty($new_signature)) {
 
 // Length check (DB limit is usually 160 or 255 depending on setup, user said 255 but db.php says 160)
 // Checking db.php: signature VARCHAR(160)
-if (mb_strlen($new_signature) > 160) {
-    $new_signature = mb_substr($new_signature, 0, 160);
+if (function_exists('mb_strlen')) {
+    if (mb_strlen($new_signature) > 160) {
+        $new_signature = mb_substr($new_signature, 0, 160);
+    }
+} else {
+    if (strlen($new_signature) > 160) {
+        $new_signature = substr($new_signature, 0, 160);
+    }
 }
 
 try {

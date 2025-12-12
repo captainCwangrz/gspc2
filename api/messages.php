@@ -87,9 +87,9 @@ try {
                 $updateStmt = $pdo->prepare(
                     'UPDATE relationships
                      SET last_msg_id = ?, last_msg_time = NOW(6), updated_at = NOW(6)
-                     WHERE id = ? AND from_id = ? AND to_id = ?'
+                     WHERE id = ? AND deleted_at IS NULL'
                 );
-                $updateStmt->execute([$msgId, $rel['id'], $normFrom, $normTo]);
+                $updateStmt->execute([$msgId, $rel['id']]);
             }
 
             $pdo->commit();
@@ -148,31 +148,39 @@ try {
 
         // Relaxed check: Allow viewing history if user was a participant, even if relationship is gone.
         if ($to_id) {
-            $params = [$user_id, $to_id, $to_id, $user_id];
-            $whereClause = '((from_id=? AND to_id=?) OR (from_id=? AND to_id=?))';
+            $selects = [];
+            $params = [];
+
+            $baseSelect = "SELECT id, from_id, message, DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s') AS created_at FROM messages WHERE from_id=? AND to_id=?";
+
+            $selectA = $baseSelect;
+            $params[] = $user_id;
+            $params[] = $to_id;
 
             if ($before_id > 0) {
-                $whereClause .= ' AND id < ?';
+                $selectA .= ' AND id < ?';
                 $params[] = $before_id;
             }
 
-            // Optimization: Get latest messages by ordering DESC first, then re-sort PHP side if needed?
-            // Actually, for "scroll up", we usually want the "latest 50 messages before X".
-            // So ORDER BY id DESC LIMIT 50 is correct, then we reverse the array for display.
+            $selects[] = $selectA;
 
-            $sql = "SELECT id, from_id, message, DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s') AS created_at
-                    FROM messages 
-                    WHERE $whereClause
-                    ORDER BY id DESC LIMIT ?";
+            $selectB = $baseSelect;
+            $params[] = $to_id;
+            $params[] = $user_id;
+            if ($before_id > 0) {
+                $selectB .= ' AND id < ?';
+                $params[] = $before_id;
+            }
+            $selects[] = $selectB;
 
-            // Limit must be integer for PDO emulation usually, but better bind it explicitly
+            $sql = '(' . $selects[0] . ') UNION ALL (' . $selects[1] . ') ORDER BY id DESC LIMIT ?';
+
             $stmt = $pdo->prepare($sql);
 
-            // Bind params
             foreach ($params as $k => $v) {
-                $stmt->bindValue($k+1, $v, PDO::PARAM_INT);
+                $stmt->bindValue($k + 1, $v, PDO::PARAM_INT);
             }
-            $stmt->bindValue(count($params)+1, $limit, PDO::PARAM_INT);
+            $stmt->bindValue(count($params) + 1, $limit, PDO::PARAM_INT);
 
             $stmt->execute();
             $results = $stmt->fetchAll();
