@@ -212,7 +212,17 @@ function mergeGraphData(nodes, links, incremental = false) {
             delete existing.__dust;
             delete existing.__dustMat;
         }
-        linkMap.set(key, { ...existing, ...l });
+
+        const merged = { ...existing, ...l };
+
+        if (existing.source && typeof existing.source === 'object') {
+            merged.source = existing.source;
+        }
+        if (existing.target && typeof existing.target === 'object') {
+            merged.target = existing.target;
+        }
+
+        linkMap.set(key, merged);
     });
 
     State.graphData.links = Array.from(linkMap.values());

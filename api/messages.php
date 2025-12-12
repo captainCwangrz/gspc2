@@ -77,9 +77,6 @@ try {
             );
             $updateStmt->execute([$msgId, $user_id, $to_id, $to_id, $user_id]);
 
-            // Advance global cursor so polling clients move forward.
-            updateSystemState($pdo);
-
             $pdo->commit();
             echo json_encode(['success' => true]);
         } catch (Exception $e) {
