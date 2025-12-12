@@ -86,11 +86,15 @@ class Database {
                   to_id   INT NOT NULL,
                   type VARCHAR(20) NOT NULL,
                   status ENUM('ACCEPTED','PENDING','REJECTED') DEFAULT 'PENDING',
+                  created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                  updated_at TIMESTAMP(6) NOT NULL
+                    DEFAULT CURRENT_TIMESTAMP(6)
+                    ON UPDATE CURRENT_TIMESTAMP(6),
 
                   FOREIGN KEY (from_id) REFERENCES users(id) ON DELETE CASCADE,
                   FOREIGN KEY (to_id)   REFERENCES users(id) ON DELETE CASCADE,
 
-                  INDEX idx_requests_to_status_id (to_id, status, id)
+                  INDEX idx_requests_to_status_updated (to_id, status, updated_at)
                 ) ENGINE=InnoDB;
 
                 CREATE TABLE IF NOT EXISTS messages (

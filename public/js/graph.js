@@ -3,6 +3,8 @@ const BACKGROUND_ROTATION_SPEED = 0.01;
 const STAR_TWINKLE_AMPLITUDE = 0.9;
 const CLOCK_START = performance.now() * 0.001;
 const CAMERA_MOVE_SPEED = 360;
+const MAX_DUST = 400;
+const UNIT_Z = new THREE.Vector3(0, 0, 1);
 
 let stateRef;
 let configRef;
@@ -190,35 +192,44 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
         .linkThreeObjectExtend(true)
         .linkThreeObject(linkRenderer)
         .linkPositionUpdate((group, { start, end }) => {
-            const middlePos = Object.assign(...['x', 'y', 'z'].map(c => ({
-                [c]: start[c] + (end[c] - start[c]) / 2
-            })));
-            Object.assign(group.position, middlePos);
+            if (!group.userData._vStart) {
+                group.userData._vStart = new THREE.Vector3();
+                group.userData._vEnd = new THREE.Vector3();
+                group.userData._dir = new THREE.Vector3();
+                group.userData._tmp = new THREE.Vector3();
+            }
 
-            if (group.children) {
-                const dustContainer = group.children.find(c => c.name === 'dust-container');
-                if (dustContainer) {
-                    const vStart = new THREE.Vector3(start.x, start.y, start.z);
-                    const vEnd = new THREE.Vector3(end.x, end.y, end.z);
-                    const dist = vStart.distanceTo(vEnd);
+            const vStart = group.userData._vStart.set(start.x, start.y, start.z);
+            const vEnd = group.userData._vEnd.set(end.x, end.y, end.z);
 
-                    if (dist > 0.001) {
-                        const dir = vEnd.clone().sub(vStart).normalize();
+            group.position.set(
+                start.x + (end.x - start.x) / 2,
+                start.y + (end.y - start.y) / 2,
+                start.z + (end.z - start.z) / 2
+            );
 
-                        dustContainer.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), dir);
-                        dustContainer.scale.set(1, 1, dist);
-                        dustContainer.visible = true;
+            const dustContainer = group.children ? group.children.find(c => c.name === 'dust-container') : null;
+            if (dustContainer) {
+                const dist = vStart.distanceTo(vEnd);
+                if (dist > 0.001) {
+                    const dir = group.userData._dir.copy(vEnd).sub(vStart).normalize();
+                    dustContainer.quaternion.setFromUnitVectors(UNIT_Z, dir);
+                    dustContainer.scale.set(1, 1, dist);
+                    dustContainer.visible = true;
 
-                        const points = dustContainer.children.find(c => c.name === 'dust-points');
-                        if (points && points.geometry) {
-                            const density = 2.5;
-                            const count = Math.min(2000, Math.floor(dist * density));
-                            points.geometry.setDrawRange(0, count);
-                        }
-                    } else {
-                        dustContainer.visible = false;
-                        dustContainer.scale.set(0, 0, 0);
+                    const link = group.userData.link;
+                    const style = link ? configRef.relStyles[link.type] : null;
+                    const hasParticles = !!(style && style.particle === true);
+                    const points = dustContainer.children.find(c => c.name === 'dust-points');
+                    if (hasParticles && points && points.geometry) {
+                        const count = Math.min(MAX_DUST, Math.floor(dist * 1.2));
+                        points.geometry.setDrawRange(0, count);
+                    } else if (points) {
+                        points.visible = false;
                     }
+                } else {
+                    dustContainer.visible = false;
+                    dustContainer.scale.set(0, 0, 0);
                 }
             }
         })
@@ -557,6 +568,8 @@ function nodeRenderer(node) {
 
 function linkRenderer(link) {
     const group = new THREE.Group();
+    group.userData.link = link;
+    link.__group = group;
     const style = configRef.relStyles[link.type];
 
     if (style && style.particle) {
@@ -594,4 +607,46 @@ export function destroyGraph() {
     stateRef = null;
     configRef = null;
     lastFrameTime = null;
+}
+
+export function disposeLinkVisual(link) {
+    if (!link || !link.__group) return;
+
+    const group = link.__group;
+    const disposeMaterial = (mat) => {
+        if (!mat) return;
+        if (mat.map && typeof mat.map.dispose === 'function') mat.map.dispose();
+        if (typeof mat.dispose === 'function') mat.dispose();
+    };
+
+    if (link.__dust) {
+        if (link.__dust.geometry && typeof link.__dust.geometry.dispose === 'function') {
+            link.__dust.geometry.dispose();
+        }
+        disposeMaterial(link.__dust.material);
+        if (link.__dust.parent) {
+            link.__dust.parent.remove(link.__dust);
+        }
+        delete link.__dust;
+    }
+
+    if (link.__dustMat) {
+        disposeMaterial(link.__dustMat);
+        delete link.__dustMat;
+    }
+
+    group.children.slice().forEach(child => {
+        if (child.geometry && typeof child.geometry.dispose === 'function') {
+            child.geometry.dispose();
+        }
+        if (child.material) {
+            disposeMaterial(child.material);
+        }
+    });
+
+    if (group.parent) {
+        group.parent.remove(group);
+    }
+
+    delete link.__group;
 }

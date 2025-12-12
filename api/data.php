@@ -30,21 +30,21 @@ function buildStateSnapshot(PDO $pdo, int $current_user_id): array {
         SELECT
             (SELECT MAX(updated_at) FROM users) as users_updated_at,
             (SELECT MAX(updated_at) FROM relationships) as rels_updated_at,
-            (SELECT MAX(id) FROM requests WHERE to_id = ? AND status = "PENDING") as max_req_id,
+            (SELECT MAX(updated_at) FROM requests WHERE to_id = ? AND status = "PENDING") as req_updated_at,
             (SELECT COUNT(*) FROM requests WHERE to_id = ? AND status = "PENDING") as req_count
     ');
     $snapshotStmt->execute([$current_user_id, $current_user_id]);
     $row = $snapshotStmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
     $reqState = [
-        'max_req_id' => $row['max_req_id'] ?? null,
+        'req_updated_at' => $row['req_updated_at'] ?? null,
         'req_count' => $row['req_count'] ?? 0
     ];
 
     $etagParts = [
         $row['users_updated_at'] ?: '0',
         $row['rels_updated_at'] ?: '0',
-        $reqState['max_req_id'] ?? '0',
+        $reqState['req_updated_at'] ?? '0',
         $reqState['req_count'] ?? 0,
         $current_user_id
     ];
@@ -67,9 +67,15 @@ try {
     if ($waitForChange && $clientEtag) {
         $timeoutSeconds = 20;
         $start = microtime(true);
+        $attempt = 0;
 
         while ($etag === $clientEtag && (microtime(true) - $start) < $timeoutSeconds) {
-            usleep(500000); // 0.5s
+            $attempt++;
+            if ($attempt <= 5) {
+                usleep(500000);
+            } else {
+                usleep(1000000);
+            }
             $stateSnapshot = buildStateSnapshot($pdo, (int)$current_user_id);
             $etag = $stateSnapshot['etag'];
         }
@@ -121,7 +127,7 @@ try {
         FROM requests r
         JOIN users u ON r.from_id = u.id
         WHERE r.to_id = ? AND r.status = "PENDING"
-        ORDER BY r.id DESC
+        ORDER BY r.updated_at DESC
     ');
     $stmt->execute([$current_user_id]);
     $requests = $stmt->fetchAll();
