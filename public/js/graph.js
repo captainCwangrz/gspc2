@@ -1,9 +1,8 @@
 const STAR_TWINKLE_SPEED = 2.8;
 const BACKGROUND_ROTATION_SPEED = 0.01;
 const STAR_TWINKLE_AMPLITUDE = 0.9;
-const DUST_TWINKLE_AMPLITUDE = 0.6;
 const CLOCK_START = performance.now() * 0.001;
-const CAMERA_MOVE_SPEED = 220;
+const CAMERA_MOVE_SPEED = 120;
 
 let stateRef;
 let configRef;
@@ -65,7 +64,7 @@ function setupMovementHandlers() {
     };
 }
 
-function buildBackgroundStarVertexShader() {
+function buildStarVertexShader() {
     return `
         uniform float uTime;
         attribute vec3 starColor;
@@ -77,42 +76,19 @@ function buildBackgroundStarVertexShader() {
             vColor = starColor;
             vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
             // Calculate projected size based on distance
-            float projSize = size * (1400.0 / max(0.0001, -mvPosition.z));
+            float projSize = size * (1000.0 / -mvPosition.z);
 
-            // Fade and clamp micro-stars to fight alias shimmer without deleting them entirely
-            float sizeFade = smoothstep(5.0, 11.5, projSize);
-            float stableSize = max(mix(2.35, projSize, sizeFade), 2.35);
+            // Fade out very small stars to prevent aliasing flicker (especially when zoomed out)
+            float sizeFade = smoothstep(1.4, 3.2, projSize);
 
             gl_Position = projectionMatrix * mvPosition;
-            gl_PointSize = clamp(stableSize, 0.0, 32.0);
+            gl_PointSize = clamp(projSize, 0.0, 28.0);
             float t = 0.5 + 0.5 * sin(uTime * ${STAR_TWINKLE_SPEED} + phase);
             float eased = t * t * (3.0 - 2.0 * t);
             float sizeFactor = clamp((size - 3.0) / 24.0, 0.0, 1.0);
             float sizeEase = pow(sizeFactor, 1.05);
-            float scaledAmplitude = ${STAR_TWINKLE_AMPLITUDE} * mix(0.35, 1.05, sizeEase);
-            vOpacity = (0.74 + scaledAmplitude * eased) * sizeFade;
-        }
-    `;
-}
-
-function buildDustVertexShader() {
-    return `
-        uniform float uTime;
-        attribute vec3 starColor;
-        attribute float size;
-        attribute float phase;
-        varying vec3 vColor;
-        varying float vOpacity;
-        void main() {
-            vColor = starColor;
-            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-            float projSize = max(size * 3.5, size * (1050.0 / max(0.0001, -mvPosition.z)));
-
-            gl_Position = projectionMatrix * mvPosition;
-            gl_PointSize = clamp(max(projSize, 2.0), 0.0, 26.0);
-            float t = 0.5 + 0.5 * sin(uTime * ${STAR_TWINKLE_SPEED * 0.8} + phase);
-            float eased = t * t * (3.0 - 2.0 * t);
-            vOpacity = (0.74 + ${DUST_TWINKLE_AMPLITUDE} * eased);
+            float scaledAmplitude = ${STAR_TWINKLE_AMPLITUDE} * mix(0.55, 1.08, sizeEase);
+            vOpacity = (0.78 + scaledAmplitude * eased) * sizeFade;
         }
     `;
 }
@@ -124,9 +100,8 @@ const STAR_FRAGMENT_SHADER = `
         if (vOpacity < 0.01) discard;
         vec2 xy = gl_PointCoord.xy - vec2(0.5);
         float dist = length(xy);
-        float antiAlias = fwidth(dist) * 1.5;
-        float core = smoothstep(0.1 + antiAlias, 0.0, dist);
-        float halo = smoothstep(0.4 + antiAlias, 0.0, dist) * 0.4;
+        float core = smoothstep(0.1, 0.0, dist);
+        float halo = smoothstep(0.4, 0.0, dist) * 0.4;
         float alpha = (core + halo);
         if (alpha < 0.01) discard;
         vec3 boosted = (vColor + vec3(0.12, 0.12, 0.24) * (halo * 2.0)) * (1.12 + halo * 0.12);
@@ -202,16 +177,15 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
     }
 
     const controls = graphRef.controls();
-        if (controls) {
-            controls.minDistance = 40;
-            controls.maxDistance = 2000;
-            controls.enableDamping = true;
-            controls.dampingFactor = 0.12;
-            controls.enablePan = true;
-            controls.enableRotate = true;
-            controls.enableZoom = true;
-            controls.zoomSpeed = 1.8;
-        }
+    if (controls) {
+        controls.minDistance = 0;
+        controls.maxDistance = 2000;
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.1;
+        controls.enablePan = true;
+        controls.enableRotate = true;
+        controls.enableZoom = true;
+    }
 
     setupMovementHandlers();
 
@@ -268,10 +242,9 @@ export function animateGraph() {
         if (controls && camera) {
             const forward = new THREE.Vector3();
             camera.getWorldDirection(forward);
-            const up = camera.up.clone().normalize();
-            forward.projectOnPlane(up);
-            if (forward.lengthSq() > 0) forward.normalize();
-            const right = new THREE.Vector3().crossVectors(forward, up);
+            const right = forward.clone().cross(camera.up);
+
+            forward.normalize();
             if (right.lengthSq() > 0) right.normalize();
 
             const movement = new THREE.Vector3();
@@ -349,9 +322,8 @@ export function initStarfieldBackground() {
             uniforms: {
                 uTime: { value: 0 }
             },
-            vertexShader: buildBackgroundStarVertexShader(),
+            vertexShader: buildStarVertexShader(),
             fragmentShader: STAR_FRAGMENT_SHADER,
-            extensions: { derivatives: true },
             transparent: true,
             depthWrite: false,
             depthTest: false,
@@ -408,9 +380,8 @@ function createSpaceDust(color) {
         uniforms: {
             uTime: { value: 0 }
         },
-        vertexShader: buildDustVertexShader(),
+        vertexShader: buildStarVertexShader(),
         fragmentShader: STAR_FRAGMENT_SHADER,
-        extensions: { derivatives: true },
         transparent: true,
         depthWrite: false,
         depthTest: false,
@@ -514,8 +485,6 @@ function linkRenderer(link) {
 
     if (style && style.particle) {
         const dust = createSpaceDust(style.color);
-
-        dust.frustumCulled = false;
 
         const dustContainer = new THREE.Group();
         dustContainer.name = 'dust-container';
