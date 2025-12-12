@@ -2,7 +2,7 @@ const STAR_TWINKLE_SPEED = 2.8;
 const BACKGROUND_ROTATION_SPEED = 0.01;
 const STAR_TWINKLE_AMPLITUDE = 0.9;
 const CLOCK_START = performance.now() * 0.001;
-const CAMERA_MOVE_SPEED = 60;
+const CAMERA_MOVE_SPEED = 120;
 
 let stateRef;
 let configRef;
@@ -78,11 +78,11 @@ function buildStarVertexShader() {
             // Calculate projected size based on distance
             float projSize = size * (1000.0 / -mvPosition.z);
 
-            // Fade out very small stars to prevent aliasing flicker
-            float sizeFade = (projSize < 0.9) ? 0.0 : smoothstep(1.2, 2.6, projSize);
+            // Fade out very small stars to prevent aliasing flicker (especially when zoomed out)
+            float sizeFade = smoothstep(1.4, 3.2, projSize);
 
             gl_Position = projectionMatrix * mvPosition;
-            gl_PointSize = max(3.0, projSize);
+            gl_PointSize = clamp(projSize, 0.0, 28.0);
             float t = 0.5 + 0.5 * sin(uTime * ${STAR_TWINKLE_SPEED} + phase);
             float eased = t * t * (3.0 - 2.0 * t);
             float sizeFactor = clamp((size - 3.0) / 24.0, 0.0, 1.0);
@@ -97,6 +97,7 @@ const STAR_FRAGMENT_SHADER = `
     varying vec3 vColor;
     varying float vOpacity;
     void main() {
+        if (vOpacity < 0.01) discard;
         vec2 xy = gl_PointCoord.xy - vec2(0.5);
         float dist = length(xy);
         float core = smoothstep(0.1, 0.0, dist);
@@ -325,6 +326,7 @@ export function initStarfieldBackground() {
             fragmentShader: STAR_FRAGMENT_SHADER,
             transparent: true,
             depthWrite: false,
+            depthTest: false,
             blending: THREE.AdditiveBlending
         });
 
@@ -382,6 +384,7 @@ function createSpaceDust(color) {
         fragmentShader: STAR_FRAGMENT_SHADER,
         transparent: true,
         depthWrite: false,
+        depthTest: false,
         blending: THREE.AdditiveBlending
     });
 
@@ -408,7 +411,7 @@ function nodeRenderer(node) {
             const avatarY = size * 0.45;
 
             if (node.id === stateRef.userId) {
-                const glowRadius = avatarRadius * 1.6;
+                const glowRadius = avatarRadius * 1.8;
                 const glow = ctx.createRadialGradient(size / 2, avatarY, avatarRadius * 0.25, size / 2, avatarY, glowRadius);
                 glow.addColorStop(0, 'rgba(139, 92, 246, 0.45)');
                 glow.addColorStop(1, 'rgba(139, 92, 246, 0)');
