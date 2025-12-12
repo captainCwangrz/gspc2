@@ -116,8 +116,6 @@ if (!$currentUser) {
 
     <div id="chat-hud"></div>
 
-    <div id="controls-overlay">WASD to Move • Right-Click to Look • Left-Click to Select</div>
-
     <script type="module">
         import { initApp } from './public/js/app.js';
         // Wait for the custom event we added in the head, or fall back to standard load

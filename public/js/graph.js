@@ -3,84 +3,6 @@ const BACKGROUND_ROTATION_SPEED = 0.01;
 const STAR_TWINKLE_AMPLITUDE = 0.9;
 const CLOCK_START = performance.now() * 0.001;
 
-const MOVE_SPEED = 120;
-const SPRINT_MULTIPLIER = 1.8;
-const LOOK_SENSITIVITY = 0.0025;
-const inputState = {
-    keys: { w: false, a: false, s: false, d: false, shift: false, space: false },
-    mouse: { isLeftDown: false, lastX: 0, lastY: 0 },
-    camera: { yaw: 0, pitch: 0 }
-};
-let lastFrame = performance.now();
-
-if (typeof window !== 'undefined') {
-    window.addEventListener('keydown', (e) => {
-        const k = e.key.toLowerCase();
-        if (inputState.keys.hasOwnProperty(k) || e.key === ' ' || e.key === 'Shift') {
-            if (e.key === ' ') inputState.keys.space = true;
-            else if (e.key === 'Shift') inputState.keys.shift = true;
-            else inputState.keys[k] = true;
-        }
-    });
-
-    window.addEventListener('keyup', (e) => {
-        const k = e.key.toLowerCase();
-        if (inputState.keys.hasOwnProperty(k) || e.key === ' ' || e.key === 'Shift') {
-            if (e.key === ' ') inputState.keys.space = false;
-            else if (e.key === 'Shift') inputState.keys.shift = false;
-            else inputState.keys[k] = false;
-        }
-    });
-}
-
-function syncLookStateWithCamera(camera) {
-    const euler = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ');
-    inputState.camera.yaw = euler.y;
-    inputState.camera.pitch = euler.x;
-}
-
-function updateOrbitTarget(camera, controls) {
-    if (!controls) return;
-    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
-    controls.target.copy(camera.position).add(forward);
-}
-
-function applyCameraRotation(camera) {
-    const pitchLimit = Math.PI / 2 - 0.05;
-    inputState.camera.pitch = Math.max(-pitchLimit, Math.min(pitchLimit, inputState.camera.pitch));
-    const euler = new THREE.Euler(inputState.camera.pitch, inputState.camera.yaw, 0, 'YXZ');
-    camera.quaternion.setFromEuler(euler);
-}
-
-function handleMouseDown(e, domElement) {
-    if (e.button !== 0) return;
-    inputState.mouse.isLeftDown = true;
-    inputState.mouse.lastX = e.clientX;
-    inputState.mouse.lastY = e.clientY;
-    domElement.style.cursor = 'grabbing';
-}
-
-function handleMouseUp(domElement) {
-    inputState.mouse.isLeftDown = false;
-    domElement.style.cursor = 'default';
-}
-
-function handleMouseMove(e, camera, controls) {
-    if (!inputState.mouse.isLeftDown) return;
-
-    const deltaX = typeof e.movementX === 'number' ? e.movementX : (e.clientX - inputState.mouse.lastX);
-    const deltaY = typeof e.movementY === 'number' ? e.movementY : (e.clientY - inputState.mouse.lastY);
-
-    inputState.mouse.lastX = e.clientX;
-    inputState.mouse.lastY = e.clientY;
-
-    inputState.camera.yaw -= deltaX * LOOK_SENSITIVITY;
-    inputState.camera.pitch -= deltaY * LOOK_SENSITIVITY;
-
-    applyCameraRotation(camera);
-    updateOrbitTarget(camera, controls);
-}
-
 let stateRef;
 let configRef;
 let graphRef = null;
@@ -198,29 +120,14 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
     }
 
     const controls = graphRef.controls();
-    const camera = graphRef.camera && graphRef.camera();
     if (controls) {
         controls.minDistance = 0;
         controls.maxDistance = 2000;
         controls.enableDamping = true;
         controls.dampingFactor = 0.1;
-        controls.enablePan = false;
-        controls.enableRotate = false;
+        controls.enablePan = true;
+        controls.enableRotate = true;
         controls.enableZoom = true;
-    }
-
-    if (camera) {
-        syncLookStateWithCamera(camera);
-        updateOrbitTarget(camera, controls);
-    }
-
-    if (renderer && renderer.domElement) {
-        const domElement = renderer.domElement;
-        domElement.addEventListener('mousedown', (e) => handleMouseDown(e, domElement));
-        domElement.addEventListener('mouseup', () => handleMouseUp(domElement));
-        domElement.addEventListener('mouseleave', () => handleMouseUp(domElement));
-        domElement.addEventListener('mousemove', (e) => handleMouseMove(e, camera, controls));
-        domElement.addEventListener('contextmenu', (e) => e.preventDefault());
     }
 
     return graphRef;
@@ -230,14 +137,11 @@ export function animateGraph() {
     if (!graphRef || !stateRef) return;
 
     if (typeof document !== 'undefined' && document.hidden) {
-        lastFrame = performance.now();
         requestAnimationFrame(animateGraph);
         return;
     }
 
     const now = performance.now();
-    const delta = (now - lastFrame) / 1000;
-    lastFrame = now;
 
     const time = Date.now() * 0.0015;
     const elapsed = (now * 0.001) - CLOCK_START;
@@ -266,33 +170,9 @@ export function animateGraph() {
 
     if (graphRef) {
         const controls = graphRef.controls();
-        const camera = graphRef.camera();
 
-        if (controls && camera) {
-            const isTranslating = inputState.keys.w || inputState.keys.a || inputState.keys.s || inputState.keys.d || inputState.keys.space;
-            if (!inputState.mouse.isLeftDown && !isTranslating) {
-                syncLookStateWithCamera(camera);
-            }
-
-            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
-            const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
-            const up = camera.up.clone().normalize();
-
-            const moveVec = new THREE.Vector3();
-            if (inputState.keys.w) moveVec.add(forward);
-            if (inputState.keys.s) moveVec.sub(forward);
-            if (inputState.keys.a) moveVec.sub(right);
-            if (inputState.keys.d) moveVec.add(right);
-            if (inputState.keys.space) moveVec.add(up);
-
-            if (moveVec.lengthSq() > 0) {
-                const speed = MOVE_SPEED * (inputState.keys.shift ? SPRINT_MULTIPLIER : 1);
-                moveVec.normalize().multiplyScalar(speed * delta);
-                camera.position.add(moveVec);
-                controls.target.add(moveVec);
-            }
-
-            updateOrbitTarget(camera, controls);
+        if (controls) {
+            controls.update();
         }
     }
 
