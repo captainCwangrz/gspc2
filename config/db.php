@@ -45,64 +45,80 @@ class Database {
 
             $sql = <<<SQL
                 CREATE TABLE IF NOT EXISTS users (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    username VARCHAR(50) UNIQUE NOT NULL,
-                    real_name VARCHAR(100) NOT NULL,
-                    dob DATE NOT NULL,
-                    password_hash VARCHAR(255) NOT NULL,
-                    avatar VARCHAR(50) NOT NULL,
-                    signature VARCHAR(160) DEFAULT NULL,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                  id INT AUTO_INCREMENT PRIMARY KEY,
+                  username VARCHAR(50) UNIQUE NOT NULL,
+                  real_name VARCHAR(100) NOT NULL,
+                  dob DATE NOT NULL,
+                  password_hash VARCHAR(255) NOT NULL,
+                  avatar VARCHAR(50) NOT NULL,
+                  signature VARCHAR(160) DEFAULT NULL,
+                  updated_at TIMESTAMP(6) NOT NULL
+                    DEFAULT CURRENT_TIMESTAMP(6)
+                    ON UPDATE CURRENT_TIMESTAMP(6),
+                  INDEX idx_users_updated_at (updated_at)
                 ) ENGINE=InnoDB;
 
                 CREATE TABLE IF NOT EXISTS relationships (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    from_id INT NOT NULL, to_id INT NOT NULL,
-                    type ENUM('DATING', 'BEST_FRIEND', 'BROTHER', 'SISTER', 'BEEFING', 'CRUSH') NOT NULL,
-                    last_msg_id INT DEFAULT 0,
-                    last_msg_time TIMESTAMP NULL DEFAULT NULL,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    FOREIGN KEY (from_id) REFERENCES users(id) ON DELETE CASCADE,
-                    FOREIGN KEY (to_id) REFERENCES users(id) ON DELETE CASCADE,
-                    UNIQUE KEY idx_rel_from_to (from_id, to_id)
+                  id INT AUTO_INCREMENT PRIMARY KEY,
+                  from_id INT NOT NULL,
+                  to_id   INT NOT NULL,
+                  type ENUM('DATING','BEST_FRIEND','BROTHER','SISTER','BEEFING','CRUSH') NOT NULL,
+                  last_msg_id INT NOT NULL DEFAULT 0,
+                  last_msg_time TIMESTAMP(6) NULL DEFAULT NULL,
+                  deleted_at TIMESTAMP(6) NULL DEFAULT NULL,
+                  updated_at TIMESTAMP(6) NOT NULL
+                    DEFAULT CURRENT_TIMESTAMP(6)
+                    ON UPDATE CURRENT_TIMESTAMP(6),
+
+                  FOREIGN KEY (from_id) REFERENCES users(id) ON DELETE CASCADE,
+                  FOREIGN KEY (to_id)   REFERENCES users(id) ON DELETE CASCADE,
+
+                  UNIQUE KEY idx_rel_pair (from_id, to_id),
+                  INDEX idx_rel_updated_at (updated_at),
+                  INDEX idx_rel_deleted_at (deleted_at),
+                  INDEX idx_rel_from (from_id),
+                  INDEX idx_rel_to (to_id)
                 ) ENGINE=InnoDB;
 
                 CREATE TABLE IF NOT EXISTS requests (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    from_id INT NOT NULL, to_id INT NOT NULL,
-                    type VARCHAR(20) NOT NULL,
-                    status ENUM('ACCEPTED', 'PENDING', 'REJECTED') DEFAULT 'PENDING',
-                    FOREIGN KEY (from_id) REFERENCES users(id) ON DELETE CASCADE,
-                    FOREIGN KEY (to_id) REFERENCES users(id) ON DELETE CASCADE
+                  id INT AUTO_INCREMENT PRIMARY KEY,
+                  from_id INT NOT NULL,
+                  to_id   INT NOT NULL,
+                  type VARCHAR(20) NOT NULL,
+                  status ENUM('ACCEPTED','PENDING','REJECTED') DEFAULT 'PENDING',
+
+                  FOREIGN KEY (from_id) REFERENCES users(id) ON DELETE CASCADE,
+                  FOREIGN KEY (to_id)   REFERENCES users(id) ON DELETE CASCADE,
+
+                  INDEX idx_requests_to_status_id (to_id, status, id)
                 ) ENGINE=InnoDB;
 
                 CREATE TABLE IF NOT EXISTS messages (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    from_id INT NOT NULL, to_id INT NOT NULL,
-                    message TEXT NOT NULL,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (from_id) REFERENCES users(id) ON DELETE CASCADE,
-                    FOREIGN KEY (to_id) REFERENCES users(id) ON DELETE CASCADE,
-                    INDEX idx_timestamp (timestamp),
-                    INDEX idx_chat_history (from_id, to_id, id)
+                  id INT AUTO_INCREMENT PRIMARY KEY,
+                  from_id INT NOT NULL,
+                  to_id   INT NOT NULL,
+                  message TEXT NOT NULL,
+                  timestamp TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+
+                  FOREIGN KEY (from_id) REFERENCES users(id) ON DELETE CASCADE,
+                  FOREIGN KEY (to_id)   REFERENCES users(id) ON DELETE CASCADE,
+
+                  INDEX idx_timestamp (timestamp),
+                  INDEX idx_chat_history (from_id, to_id, id)
                 ) ENGINE=InnoDB;
 
                 CREATE TABLE IF NOT EXISTS read_receipts (
-                    user_id INT NOT NULL,
-                    peer_id INT NOT NULL,
-                    last_read_msg_id INT NOT NULL DEFAULT 0,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    PRIMARY KEY (user_id, peer_id),
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                    FOREIGN KEY (peer_id) REFERENCES users(id) ON DELETE CASCADE
-                ) ENGINE=InnoDB;
+                  user_id INT NOT NULL,
+                  peer_id INT NOT NULL,
+                  last_read_msg_id INT NOT NULL DEFAULT 0,
+                  updated_at TIMESTAMP(6) NOT NULL
+                    DEFAULT CURRENT_TIMESTAMP(6)
+                    ON UPDATE CURRENT_TIMESTAMP(6),
 
-                CREATE TABLE IF NOT EXISTS system_state (
-                    id INT PRIMARY KEY,
-                    last_update TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                  PRIMARY KEY (user_id, peer_id),
+                  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                  FOREIGN KEY (peer_id) REFERENCES users(id) ON DELETE CASCADE
                 ) ENGINE=InnoDB;
-
-                INSERT IGNORE INTO system_state (id, last_update) VALUES (1, NOW());
             SQL;
             self::$pdo->exec($sql);
 
@@ -112,10 +128,6 @@ class Database {
             exit('Internal Server Error');
         }
     }
-}
-
-function updateSystemState($pdo) {
-    $pdo->exec("UPDATE system_state SET last_update = NOW() WHERE id = 1");
 }
 
 // Helper constants

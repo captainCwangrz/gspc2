@@ -20,16 +20,28 @@ session_write_close(); // Release session lock
 
 $action = $_POST["action"] ?? "";
 
+function isDirectedType(string $type): bool {
+    return in_array($type, DIRECTED_RELATION_TYPES, true);
+}
+
+function normalizeFromTo(string $type, int $from, int $to): array {
+    if (isDirectedType($type)) {
+        return [$from, $to];
+    }
+
+    return [$from < $to ? $from : $to, $from < $to ? $to : $from];
+}
+
 try {
     // 发起请求
     if ($action === "request") {
         $to_id = (int)($_POST["to_id"] ?? 0);
         $type = $_POST["type"] ?? "";
-        
+
         // Use constants for validation
         if ($to_id && in_array($type, RELATION_TYPES) && $to_id !== $user_id) {
             // 1. 检查是否已有关系 (双向)
-            $checkRel = $pdo->prepare("SELECT id FROM relationships WHERE (from_id=? AND to_id=?) OR (from_id=? AND to_id=?)");
+            $checkRel = $pdo->prepare("SELECT id FROM relationships WHERE deleted_at IS NULL AND ((from_id=? AND to_id=?) OR (from_id=? AND to_id=?))");
             $checkRel->execute([$user_id, $to_id, $to_id, $user_id]);
             if ($checkRel->fetch()) {
                 echo json_encode(['success' => false, 'error' => 'Relationship already exists']);
@@ -43,7 +55,6 @@ try {
             if(!$checkReq->fetch()) {
                 $stmt = $pdo->prepare('INSERT INTO requests (from_id, to_id, type) VALUES (?, ?, ?)');
                 $stmt->execute([$user_id, $to_id, $type]);
-                updateSystemState($pdo);
                 echo json_encode(['success' => true]);
             } else {
                 echo json_encode(['success' => false, 'error' => 'Request pending']);
@@ -60,7 +71,7 @@ try {
 
         if ($to_id && in_array($type, RELATION_TYPES) && $to_id !== $user_id) {
             // Check existence
-            $checkRel = $pdo->prepare("SELECT id FROM relationships WHERE (from_id=? AND to_id=?) OR (from_id=? AND to_id=?)");
+            $checkRel = $pdo->prepare("SELECT id FROM relationships WHERE deleted_at IS NULL AND ((from_id=? AND to_id=?) OR (from_id=? AND to_id=?))");
             $checkRel->execute([$user_id, $to_id, $to_id, $user_id]);
 
             if ($checkRel->fetch()) {
@@ -71,7 +82,6 @@ try {
                 if (!$checkReq->fetch()) {
                     $stmt = $pdo->prepare('INSERT INTO requests (from_id, to_id, type) VALUES (?, ?, ?)');
                     $stmt->execute([$user_id, $to_id, $type]);
-                    updateSystemState($pdo);
                     echo json_encode(['success' => true, 'message' => 'Update request sent']);
                 } else {
                     echo json_encode(['success' => false, 'error' => 'Request pending']);
@@ -102,21 +112,21 @@ try {
             $upd->execute([$req_id]);
 
             // 2. Check if relationship exists (for update or new)
-            $checkRel = $pdo->prepare("SELECT id FROM relationships WHERE (from_id=? AND to_id=?) OR (from_id=? AND to_id=?)");
-            $checkRel->execute([$request['from_id'], $request['to_id'], $request['to_id'], $request['from_id']]);
+            [$normFrom, $normTo] = normalizeFromTo($request['type'], (int)$request['from_id'], (int)$request['to_id']);
+            $checkRel = $pdo->prepare("SELECT id, from_id, to_id, deleted_at FROM relationships WHERE (from_id=? AND to_id=?) OR (from_id=? AND to_id=?) LIMIT 1");
+            $checkRel->execute([$normFrom, $normTo, $normTo, $normFrom]);
             $existingRel = $checkRel->fetch();
 
             try {
                 if ($existingRel) {
                     // Update existing relationship
-                    $updateRel = $pdo->prepare("UPDATE relationships SET type = ? WHERE id = ?");
-                    $updateRel->execute([$request['type'], $existingRel['id']]);
+                    $updateRel = $pdo->prepare("UPDATE relationships SET from_id = ?, to_id = ?, type = ?, deleted_at = NULL WHERE id = ?");
+                    $updateRel->execute([$normFrom, $normTo, $request['type'], $existingRel['id']]);
                 } else {
                     // Create new relationship
                     $ins = $pdo->prepare('INSERT INTO relationships (from_id, to_id, type) VALUES (?,?,?)');
-                    $ins->execute([$request['from_id'], $request['to_id'], $request['type']]);
+                    $ins->execute([$normFrom, $normTo, $request['type']]);
                 }
-                updateSystemState($pdo);
                 $pdo->commit();
                 echo json_encode(['success' => true]);
             } catch (PDOException $e) {
@@ -137,17 +147,15 @@ try {
         $req_id = (int)($_POST["request_id"] ?? 0);
         $stmt = $pdo->prepare('UPDATE requests SET status = "REJECTED" WHERE id=? AND to_id=?');
         $stmt->execute([$req_id, $user_id]);
-        updateSystemState($pdo);
         echo json_encode(['success' => true]);
     }
     // 删除关系
     elseif ($action === "remove") {
         $to_id = (int)($_POST["to_id"] ?? 0);
         if ($to_id) {
-            $sql = 'DELETE FROM relationships WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)';
+            $sql = 'UPDATE relationships SET deleted_at = NOW(6) WHERE deleted_at IS NULL AND ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?))';
             $stmt = $pdo->prepare($sql);
             $stmt->execute([$user_id, $to_id, $to_id, $user_id]);
-            updateSystemState($pdo);
             echo json_encode(['success' => true]);
         }
     }

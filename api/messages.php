@@ -17,13 +17,24 @@ session_write_close(); // Unblock session
 
 $action = $_POST["action"] ?? $_GET["action"] ?? "";
 
-// Helper: Check if active relationship exists
-function checkRelationship(int $from_id, int $to_id, PDO $pdo): bool {
-    if ($from_id === $to_id) return false;
-    $sql = 'SELECT id FROM relationships WHERE (from_id=? AND to_id=?) OR (from_id=? AND to_id=?)';
+function isDirectedType(string $type): bool {
+    return in_array($type, DIRECTED_RELATION_TYPES, true);
+}
+
+function normalizeFromTo(string $type, int $from, int $to): array {
+    if (isDirectedType($type)) {
+        return [$from, $to];
+    }
+
+    return [$from < $to ? $from : $to, $from < $to ? $to : $from];
+}
+
+function getActiveRelationships(int $fromId, int $toId, PDO $pdo): array {
+    if ($fromId === $toId) return [];
+    $sql = 'SELECT id, from_id, to_id, type FROM relationships WHERE deleted_at IS NULL AND ((from_id=? AND to_id=?) OR (from_id=? AND to_id=?))';
     $stmt = $pdo->prepare($sql);
-    $stmt->execute([$from_id, $to_id, $to_id, $from_id]);
-    return (bool) $stmt->fetchColumn();
+    $stmt->execute([$fromId, $toId, $toId, $fromId]);
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 function userExists(int $userId, PDO $pdo): bool {
@@ -58,7 +69,8 @@ try {
         }
 
         // Strict check: Must have active relationship to send
-        if (!checkRelationship($user_id, $to_id, $pdo)) {
+        $activeRelationships = getActiveRelationships($user_id, $to_id, $pdo);
+        if (empty($activeRelationships)) {
             http_response_code(403);
             echo json_encode(['error' => 'Relationship required to send messages']);
             exit;
@@ -70,12 +82,15 @@ try {
             $stmt->execute([$user_id, $to_id, $message]);
             $msgId = (int)$pdo->lastInsertId();
 
-            $updateStmt = $pdo->prepare(
-                'UPDATE relationships
-                 SET last_msg_id = ?, last_msg_time = NOW(), updated_at = NOW()
-                 WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)'
-            );
-            $updateStmt->execute([$msgId, $user_id, $to_id, $to_id, $user_id]);
+            foreach ($activeRelationships as $rel) {
+                [$normFrom, $normTo] = normalizeFromTo($rel['type'], (int)$rel['from_id'], (int)$rel['to_id']);
+                $updateStmt = $pdo->prepare(
+                    'UPDATE relationships
+                     SET last_msg_id = ?, last_msg_time = NOW(6), updated_at = NOW(6)
+                     WHERE id = ? AND from_id = ? AND to_id = ?'
+                );
+                $updateStmt->execute([$msgId, $rel['id'], $normFrom, $normTo]);
+            }
 
             $pdo->commit();
             echo json_encode(['success' => true]);
