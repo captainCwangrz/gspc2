@@ -2,7 +2,7 @@ const STAR_TWINKLE_SPEED = 2.8;
 const BACKGROUND_ROTATION_SPEED = 0.01;
 const STAR_TWINKLE_AMPLITUDE = 0.9;
 const CLOCK_START = performance.now() * 0.001;
-const CAMERA_MOVE_SPEED = 120;
+const CAMERA_MOVE_SPEED = 360;
 
 let stateRef;
 let configRef;
@@ -205,6 +205,13 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
 
                     dustContainer.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1), dir);
                     dustContainer.scale.set(1, 1, dist);
+
+                    const points = dustContainer.children.find(c => c.name === 'dust-points');
+                    if (points && points.geometry) {
+                        const density = 2.5;
+                        const count = Math.min(2000, Math.floor(dist * density));
+                        points.geometry.setDrawRange(0, count);
+                    }
                 }
             }
         })
@@ -400,7 +407,7 @@ export function initStarfieldBackground() {
 }
 
 function createSpaceDust(color) {
-    const particleCount = 180;
+    const particleCount = 2000;
     const geo = new THREE.BufferGeometry();
     const pos = [];
     const colors = [];

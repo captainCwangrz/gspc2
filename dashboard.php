@@ -68,6 +68,10 @@ if (!$currentUser) {
     <div id="loader"><h2>Connecting to Gossip Neural Net...</h2></div>
     <div id="3d-graph"></div>
 
+    <div style="position: fixed; bottom: 20px; left: 20px; color: rgba(255,255,255,0.4); font-size: 0.8em; font-family: 'Noto Sans SC', sans-serif; pointer-events: none; z-index: 5; user-select: none;">
+        Controls: WASD to Move
+    </div>
+
     <div id="search-hud" class="hud-panel">
         <input type="text" id="search-input" class="search-box" placeholder="Search for a user...">
         <div id="search-results"></div>
