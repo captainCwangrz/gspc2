@@ -5,6 +5,7 @@ const CLOCK_START = performance.now() * 0.001;
 const CAMERA_MOVE_SPEED = 360;
 const MAX_DUST = 400;
 const UNIT_Z = new THREE.Vector3(0, 0, 1);
+const UNIT_Y = new THREE.Vector3(0, 1, 0);
 
 let stateRef;
 let configRef;
@@ -230,6 +231,28 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
                 } else {
                     dustContainer.visible = false;
                     dustContainer.scale.set(0, 0, 0);
+                }
+            }
+
+            const arrow = group.children ? group.children.find(c => c.name === 'direction-cone') : null;
+            if (arrow) {
+                const dist = vStart.distanceTo(vEnd);
+                if (dist > 10) {
+                    arrow.visible = true;
+
+                    const dir = group.userData._dir.copy(vEnd).sub(vStart);
+                    if (dir.lengthSq() > 0) {
+                        dir.normalize();
+                        arrow.quaternion.setFromUnitVectors(UNIT_Y, dir);
+                        const offset = dist * 0.15;
+                        arrow.position.set(
+                            dir.x * offset,
+                            dir.y * offset,
+                            dir.z * offset
+                        );
+                    }
+                } else {
+                    arrow.visible = false;
                 }
             }
         })
@@ -582,6 +605,16 @@ function linkRenderer(link) {
 
         link.__dust = dust;
         link.__dustMat = dust.material;
+    }
+
+    if (configRef.directedTypes && configRef.directedTypes.includes(link.type)) {
+        const color = style ? style.color : '#fff';
+        const geo = new THREE.ConeGeometry(2, 6, 8);
+        const mat = new THREE.MeshBasicMaterial({ color });
+        const cone = new THREE.Mesh(geo, mat);
+        cone.name = 'direction-cone';
+        cone.visible = false;
+        group.add(cone);
     }
 
     const sprite = new SpriteText(link.displayLabel || (style ? style.label : link.type));
