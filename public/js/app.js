@@ -453,37 +453,50 @@ function showNodeInspector(node) {
         const canMessage = Boolean(outgoing || incoming || undirected);
         const canManageRelationship = Boolean(outgoing || undirected);
         const activeRel = outgoing || undirected;
-        if (activeRel && !statusHtml) {
-            const style = CONFIG.relStyles[activeRel.type] || { color: '#fff' };
-            statusHtml = `<div style="color:${style.color}">${getRelLabel(activeRel.type)}</div>`;
-        }
-
-        if (outgoing) {
-            const style = CONFIG.relStyles[outgoing.type] || { color: '#fff' };
-            if (isDirected(outgoing.type)) {
-                statusHtml += `<div style="color:${style.color}">You → ${escapeHtml(node.name)}: ${getRelLabel(outgoing.type)}</div>`;
-            } else {
-                statusHtml += `<div style="color:${style.color}">${getRelLabel(outgoing.type)}</div>`;
-            }
-        }
-
-        if (incoming) {
-            const style = CONFIG.relStyles[incoming.type] || { color: '#fff' };
-            if (isDirected(incoming.type)) {
-                statusHtml += `<div style="color:${style.color}">${escapeHtml(node.name)} → You: ${getRelLabel(incoming.type)}</div>`;
-            }
-        }
-
-        if (!outgoing && !incoming && node.last_msg_id > 0) {
-            statusHtml += `<div style="color:#94a3b8">History available</div>`;
-        }
-
         if (mutualCrush) {
-            statusHtml += `<div style="margin-top:6px; color:#f472b6; font-weight:bold;">💞 Mutual Crush</div>`;
+            statusHtml = `
+                <div class="rel-badge mutual">
+                    <span class="rel-icon">💞</span>
+                    <span class="rel-label">Mutual Crush</span>
+                </div>
+            `;
+        } else {
+            if (outgoing) {
+                const style = CONFIG.relStyles[outgoing.type] || { color: '#fff' };
+                statusHtml += `
+                    <div class="rel-badge outgoing" style="border-color:${style.color}">
+                        <span class="rel-label" style="color:${style.color}">${getRelLabel(outgoing.type)}</span>
+                        <span class="rel-tag">Sent ↗</span>
+                    </div>
+                `;
+            }
+
+            if (incoming) {
+                const style = CONFIG.relStyles[incoming.type] || { color: '#fff' };
+                statusHtml += `
+                    <div class="rel-badge incoming" style="border-color:${style.color}">
+                        <span class="rel-label" style="color:${style.color}">${getRelLabel(incoming.type)}</span>
+                        <span class="rel-tag">Received ↙</span>
+                    </div>
+                `;
+            }
+
+            if (!outgoing && !incoming && undirected) {
+                const style = CONFIG.relStyles[undirected.type] || { color: '#fff' };
+                statusHtml += `
+                    <div class="rel-badge" style="border-color:${style.color}">
+                        <span class="rel-label" style="color:${style.color}">${getRelLabel(undirected.type)}</span>
+                        <span class="rel-tag">Connected</span>
+                    </div>
+                `;
+            }
+
+            if (!statusHtml && node.last_msg_id > 0) {
+                statusHtml += `<div style="color:#94a3b8">History available</div>`;
+            }
         }
 
         if(canManageRelationship) {
-            const style = CONFIG.relStyles[activeRel.type] || { color: '#fff' };
             const options = RELATION_TYPES.map(t =>
                 `<option value="${t}" ${activeRel.type === t ? 'selected' : ''}>${getRelLabel(t)}</option>`
             ).join('');

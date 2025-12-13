@@ -49,6 +49,51 @@ input, button, select, textarea { font-family: inherit; }
 .signature-display::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
 .signature-display::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
 
+.rel-badge {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid transparent;
+    gap: 8px;
+}
+
+.rel-badge.outgoing {
+    background: rgba(248, 113, 113, 0.08);
+}
+
+.rel-badge.incoming {
+    background: rgba(52, 211, 153, 0.08);
+}
+
+.rel-badge.mutual {
+    justify-content: center;
+    gap: 10px;
+    background: rgba(236, 72, 153, 0.15);
+    border: 1px solid #ec4899;
+}
+
+.rel-label {
+    font-weight: 600;
+}
+
+.rel-icon {
+    font-size: 1.1em;
+}
+
+.rel-tag {
+    font-size: 0.75em;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #94a3b8;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
 .unread-messages-container { margin-top: 10px; }
 .unread-messages-header { font-weight: bold; margin-bottom: 8px; color: #38bdf8; }
 .unread-item { cursor: pointer; background: rgba(56,189,248,0.1); padding: 8px; margin-bottom: 8px; border-radius: 6px; font-size: 0.9em; }
