@@ -235,27 +235,46 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
             }
 
             const arrow = group.children ? group.children.find(c => c.name === 'direction-cone') : null;
-            if (arrow) {
+            const arrowRev = group.children ? group.children.find(c => c.name === 'reverse-direction-cone') : null;
+
+            if (arrow && arrowRev) {
                 const link = group.userData.link;
                 const isDirected = !!(link && configRef && Array.isArray(configRef.directedTypes) && configRef.directedTypes.includes(link.type));
                 const dist = vStart.distanceTo(vEnd);
 
-                if (dist > 10 && isDirected) {
-                    arrow.visible = true;
-
+                if (dist > 10) {
                     const dir = group.userData._dir.copy(vEnd).sub(vStart);
                     if (dir.lengthSq() > 0) {
                         dir.normalize();
-                        arrow.quaternion.setFromUnitVectors(UNIT_Y, dir);
                         const offset = dist * 0.15;
+
+                        arrow.visible = true;
+                        arrow.quaternion.setFromUnitVectors(UNIT_Y, dir);
                         arrow.position.set(
                             dir.x * offset,
                             dir.y * offset,
                             dir.z * offset
                         );
+
+                        if (!isDirected) {
+                            arrowRev.visible = true;
+                            const revDir = dir.clone().negate();
+                            arrowRev.quaternion.setFromUnitVectors(UNIT_Y, revDir);
+                            arrowRev.position.set(
+                                revDir.x * offset,
+                                revDir.y * offset,
+                                revDir.z * offset
+                            );
+                        } else {
+                            arrowRev.visible = false;
+                        }
+                    } else {
+                        arrow.visible = false;
+                        arrowRev.visible = false;
                     }
                 } else {
                     arrow.visible = false;
+                    arrowRev.visible = false;
                 }
             }
         })
@@ -617,6 +636,11 @@ function linkRenderer(link) {
     cone.name = 'direction-cone';
     cone.visible = false;
     group.add(cone);
+
+    const cone2 = new THREE.Mesh(geo, mat);
+    cone2.name = 'reverse-direction-cone';
+    cone2.visible = false;
+    group.add(cone2);
 
     const sprite = new SpriteText(link.displayLabel || (style ? style.label : link.type));
     sprite.fontFace = '"Fredoka", "Varela Round", "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
