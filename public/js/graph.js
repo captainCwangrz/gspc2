@@ -686,7 +686,7 @@ function nodeRenderer(node) {
                 ctx.fillStyle = '#0f172a';
                 ctx.fillRect(size / 2 - avatarRadius, avatarY - avatarRadius, avatarRadius * 2, avatarRadius * 2);
                 ctx.fillStyle = 'white';
-                ctx.font = 'bold 220px "Orbitron", sans-serif';
+                ctx.font = 'bold 220px "Noto Sans SC", sans-serif';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillText((node.name || '').charAt(0).toUpperCase(), size / 2, avatarY);
@@ -694,7 +694,7 @@ function nodeRenderer(node) {
             ctx.restore();
 
             const name = (node.name || '').trim();
-            ctx.font = 'bold 72px "Orbitron", "Noto Sans SC", sans-serif';
+            ctx.font = 'bold 72px "Noto Sans SC", sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillStyle = 'white';

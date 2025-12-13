@@ -1,6 +1,6 @@
 import { fetchGraphData, syncReadReceipts } from './api.js';
 import { createGraph, animateGraph, initStarfieldBackground, disposeLinkVisual, transitionCamera } from './graph.js';
-import { initUI, updateRequestsUI, updateNotificationHUD, showToast, escapeHtml, getRelLabel } from './ui.js';
+import { initUI, updateRequestsUI, updateNotificationHUD, updateConnectionPanel, showToast, escapeHtml, getRelLabel } from './ui.js';
 
 if (!window.APP_CONFIG) {
     console.error('APP_CONFIG is missing. Unable to initialize application configuration.');
@@ -109,6 +109,7 @@ function applyGraphPayload(data) {
 
     updateRequestsUI(data.requests || []);
     updateNotificationHUD(State.graphData.nodes);
+    updateConnectionPanel();
 
     if (topologyChanged || State.isFirstLoad) {
         Graph.graphData(State.graphData);

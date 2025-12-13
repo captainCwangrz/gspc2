@@ -74,6 +74,14 @@ if (!$currentUser) {
         Controls: WASD to Move
     </div>
 
+    <div id="connection-panel" class="hud-panel">
+        <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <span class="panel-title">Connections</span>
+            <button id="conn-toggle-btn" style="background:none; border:none; color:white; cursor:pointer;">◀</button>
+        </div>
+        <div id="connection-list"></div>
+    </div>
+
     <div id="search-hud" class="hud-panel">
         <input type="text" id="search-input" class="search-box" placeholder="Search for a user...">
         <div id="search-results"></div>
