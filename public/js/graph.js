@@ -7,17 +7,27 @@ const UNIT_Z = new THREE.Vector3(0, 0, 1);
 const UNIT_Y = new THREE.Vector3(0, 1, 0);
 const UNIT_X = new THREE.Vector3(1, 0, 0);
 const CAMERA_MOVE_SPEED = 350;
+const SCROLL_SPEED = 50;
 const ROTATION_SPEED = 0.0025;
 
 let stateRef;
 let configRef;
 let graphRef = null;
 let lastFrameTime = null;
-let isTransitioning = false;
 let cameraRef = null;
 let inputHandlersInitialized = false;
 const textureCache = new Map();
 const linkTextureCache = new Map();
+
+const transitionState = {
+    active: false,
+    startTime: 0,
+    duration: 0,
+    startPos: new THREE.Vector3(),
+    endPos: new THREE.Vector3(),
+    startQuat: new THREE.Quaternion(),
+    endQuat: new THREE.Quaternion()
+};
 
 const inputState = {
     keys: {
@@ -210,7 +220,7 @@ function initInputHandlers(element) {
     };
 
     const onMouseMove = event => {
-        if (!inputState.mouse.isDown || !cameraRef) return;
+        if (!inputState.mouse.isDown || !cameraRef || transitionState.active) return;
 
         const yawDelta = -event.movementX * ROTATION_SPEED;
         const pitchDelta = -event.movementY * ROTATION_SPEED;
@@ -227,17 +237,29 @@ function initInputHandlers(element) {
         }
     };
 
+    const onWheel = event => {
+        if (!cameraRef || transitionState.active) return;
+
+        event.preventDefault();
+        const delta = Math.sign(event.deltaY);
+        const forward = new THREE.Vector3();
+        cameraRef.getWorldDirection(forward);
+        const distance = -delta * SCROLL_SPEED;
+        cameraRef.position.addScaledVector(forward, distance);
+    };
+
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     element.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mouseup', onMouseUp);
     element.addEventListener('mousemove', onMouseMove);
+    element.addEventListener('wheel', onWheel, { passive: false });
 
     inputHandlersInitialized = true;
 }
 
 function processCameraMovement(dt) {
-    if (!graphRef || !cameraRef || isTransitioning) return;
+    if (!graphRef || !cameraRef || transitionState.active) return;
     if (isFormFieldActive()) return;
 
     const moveDirection = new THREE.Vector3();
@@ -412,7 +434,7 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
         controls.update = () => {};
     }
 
-    cameraRef = controls && controls.object ? controls.object : null;
+    cameraRef = graphRef.camera();
 
     initInputHandlers(element);
 
@@ -420,38 +442,51 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
 }
 
 export function transitionCamera(pos, lookAt, duration = 1500) {
-    if (!graphRef) return;
-
-    isTransitioning = true;
+    if (!cameraRef) return;
 
     resetInputState();
 
-    graphRef.cameraPosition(pos, lookAt, duration);
+    transitionState.startTime = performance.now();
+    transitionState.duration = duration;
+    transitionState.startPos.copy(cameraRef.position);
+    transitionState.endPos.set(pos.x, pos.y, pos.z);
+    transitionState.startQuat.copy(cameraRef.quaternion);
 
-    setTimeout(() => {
-        isTransitioning = false;
-    }, duration + 50);
+    const lookTarget = new THREE.Vector3(lookAt.x, lookAt.y, lookAt.z);
+    const previewCam = cameraRef.clone();
+    previewCam.position.copy(transitionState.endPos);
+    previewCam.lookAt(lookTarget);
+    transitionState.endQuat.copy(previewCam.quaternion);
+
+    transitionState.active = true;
+}
+
+function easeCubicInOut(t) {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
 export function animateGraph() {
     if (!graphRef || !stateRef) return;
 
     const now = performance.now();
-
-    if (typeof document !== 'undefined' && document.hidden) {
-        lastFrameTime = now;
-        requestAnimationFrame(animateGraph);
-        return;
-    }
-
-    if (lastFrameTime === null) {
-        lastFrameTime = now;
-    }
-
+    if (lastFrameTime === null) lastFrameTime = now;
     const deltaSeconds = (now - lastFrameTime) * 0.001;
     lastFrameTime = now;
 
-    processCameraMovement(deltaSeconds);
+    if (transitionState.active) {
+        const elapsed = now - transitionState.startTime;
+        const t = Math.min(1, elapsed / transitionState.duration);
+        const eased = easeCubicInOut(t);
+
+        cameraRef.position.lerpVectors(transitionState.startPos, transitionState.endPos, eased);
+        cameraRef.quaternion.slerpQuaternions(transitionState.startQuat, transitionState.endQuat, eased);
+
+        if (t >= 1) {
+            transitionState.active = false;
+        }
+    } else {
+        processCameraMovement(deltaSeconds);
+    }
 
     const time = Date.now() * 0.0015;
     const elapsed = (now * 0.001) - CLOCK_START;
@@ -476,13 +511,6 @@ export function animateGraph() {
         if(stars && stars.material.uniforms) {
             stars.material.uniforms.uTime.value = elapsed;
         }
-    }
-
-    if (graphRef) {
-        // const controls = graphRef.controls();
-        // if (controls) {
-        //     controls.update();
-        // }
     }
 
     requestAnimationFrame(animateGraph);
