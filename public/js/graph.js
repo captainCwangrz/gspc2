@@ -233,7 +233,19 @@ function initInputHandlers(element) {
         if (pitchDelta !== 0) {
             const pitchAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(cameraRef.quaternion).normalize();
             const pitchQuat = new THREE.Quaternion().setFromAxisAngle(pitchAxis, pitchDelta);
-            cameraRef.quaternion.multiply(pitchQuat);
+
+            // Predict the resulting forward vector after applying pitch
+            const testQuat = cameraRef.quaternion.clone().multiply(pitchQuat);
+            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(testQuat);
+            const angleToUp = forward.angleTo(UNIT_Y);
+
+            // Prevent flipping by keeping the pitch away from exact up/down
+            const minAngle = 0.1; // ~5.7 degrees from straight up
+            const maxAngle = Math.PI - 0.1; // ~174.3 degrees from straight up
+
+            if (angleToUp > minAngle && angleToUp < maxAngle) {
+                cameraRef.quaternion.multiply(pitchQuat);
+            }
         }
     };
 
