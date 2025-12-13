@@ -8,7 +8,10 @@ const UNIT_Y = new THREE.Vector3(0, 1, 0);
 const UNIT_X = new THREE.Vector3(1, 0, 0);
 const CAMERA_MOVE_SPEED = 350;
 const SCROLL_SPEED = 50;
-const ROTATION_SPEED = 0.0025;
+const ROTATION_SPEED = 0.002;
+
+const PI_HALF = Math.PI / 2;
+const MAX_PITCH = PI_HALF - 0.1; // ~85 degrees
 
 let stateRef;
 let configRef;
@@ -18,6 +21,7 @@ let cameraRef = null;
 let inputHandlersInitialized = false;
 const textureCache = new Map();
 const linkTextureCache = new Map();
+let isDragging = false;
 
 const transitionState = {
     active: false,
@@ -171,10 +175,14 @@ function resetInputState() {
     inputState.keys.up = false;
     inputState.keys.down = false;
     inputState.mouse.isDown = false;
+    isDragging = false;
 }
 
 function initInputHandlers(element) {
     if (!element || inputHandlersInitialized) return;
+
+    // Ensure camera uses FPS-style Euler ordering
+    if (cameraRef) cameraRef.rotation.order = 'YXZ';
 
     const updateKeyState = (code, isPressed) => {
         switch (code) {
@@ -202,70 +210,54 @@ function initInputHandlers(element) {
         }
     };
 
-    const onKeyDown = event => {
+    window.addEventListener('keydown', event => {
         if (isFormFieldActive()) return;
         updateKeyState(event.code, true);
-    };
+    });
 
-    const onKeyUp = event => {
-        updateKeyState(event.code, false);
-    };
+    window.addEventListener('keyup', event => updateKeyState(event.code, false));
 
-    const onMouseDown = () => {
-        inputState.mouse.isDown = true;
-    };
+    element.addEventListener('mousedown', event => {
+        if (event.button === 0) {
+            isDragging = true;
+            inputState.mouse.isDown = true;
 
-    const onMouseUp = () => {
-        inputState.mouse.isDown = false;
-    };
-
-    const onMouseMove = event => {
-        if (!inputState.mouse.isDown || !cameraRef || transitionState.active) return;
-
-        const yawDelta = -event.movementX * ROTATION_SPEED;
-        const pitchDelta = -event.movementY * ROTATION_SPEED;
-
-        if (yawDelta !== 0) {
-            const yawQuat = new THREE.Quaternion().setFromAxisAngle(UNIT_Y, yawDelta);
-            cameraRef.quaternion.premultiply(yawQuat);
-        }
-
-        if (pitchDelta !== 0) {
-            const pitchAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(cameraRef.quaternion).normalize();
-            const pitchQuat = new THREE.Quaternion().setFromAxisAngle(pitchAxis, pitchDelta);
-
-            // Predict the resulting forward vector after applying pitch
-            const testQuat = cameraRef.quaternion.clone().multiply(pitchQuat);
-            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(testQuat);
-            const angleToUp = forward.angleTo(UNIT_Y);
-
-            // Prevent flipping by keeping the pitch away from exact up/down
-            const minAngle = 0.1; // ~5.7 degrees from straight up
-            const maxAngle = Math.PI - 0.1; // ~174.3 degrees from straight up
-
-            if (angleToUp > minAngle && angleToUp < maxAngle) {
-                cameraRef.quaternion.multiply(pitchQuat);
+            if (cameraRef) {
+                cameraRef.rotation.order = 'YXZ';
+                cameraRef.rotation.setFromQuaternion(cameraRef.quaternion, 'YXZ');
             }
         }
-    };
+    });
 
-    const onWheel = event => {
+    window.addEventListener('mouseup', () => {
+        isDragging = false;
+        inputState.mouse.isDown = false;
+    });
+
+    element.addEventListener('mousemove', event => {
+        if (!isDragging || !cameraRef || transitionState.active) return;
+
+        const movementX = event.movementX || event.mozMovementX || event.webkitMovementX || 0;
+        const movementY = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
+
+        cameraRef.rotation.y -= movementX * ROTATION_SPEED;
+        cameraRef.rotation.x -= movementY * ROTATION_SPEED;
+
+        cameraRef.rotation.x = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, cameraRef.rotation.x));
+        cameraRef.rotation.z = 0;
+
+        cameraRef.updateMatrix();
+    });
+
+    element.addEventListener('wheel', event => {
         if (!cameraRef || transitionState.active) return;
-
         event.preventDefault();
-        const delta = Math.sign(event.deltaY);
+
         const forward = new THREE.Vector3();
         cameraRef.getWorldDirection(forward);
-        const distance = -delta * SCROLL_SPEED;
+        const distance = -Math.sign(event.deltaY) * SCROLL_SPEED;
         cameraRef.position.addScaledVector(forward, distance);
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-    element.addEventListener('mousedown', onMouseDown);
-    window.addEventListener('mouseup', onMouseUp);
-    element.addEventListener('mousemove', onMouseMove);
-    element.addEventListener('wheel', onWheel, { passive: false });
+    }, { passive: false });
 
     inputHandlersInitialized = true;
 }
@@ -274,27 +266,26 @@ function processCameraMovement(dt) {
     if (!graphRef || !cameraRef || transitionState.active) return;
     if (isFormFieldActive()) return;
 
-    const moveDirection = new THREE.Vector3();
     const forward = new THREE.Vector3();
-    cameraRef.getWorldDirection(forward).normalize();
+    cameraRef.getWorldDirection(forward);
+    forward.normalize();
 
-    const right = new THREE.Vector3().crossVectors(forward, UNIT_Y);
-    const hasRight = right.lengthSq() > 0.000001;
-    if (hasRight) {
-        right.normalize();
+    const right = new THREE.Vector3();
+    right.crossVectors(forward, UNIT_Y).normalize();
+
+    const moveDir = new THREE.Vector3();
+
+    if (inputState.keys.forward) moveDir.add(forward);
+    if (inputState.keys.back) moveDir.sub(forward);
+    if (inputState.keys.right) moveDir.add(right);
+    if (inputState.keys.left) moveDir.sub(right);
+    if (inputState.keys.up) moveDir.add(UNIT_Y);
+    if (inputState.keys.down) moveDir.sub(UNIT_Y);
+
+    if (moveDir.lengthSq() > 0) {
+        moveDir.normalize().multiplyScalar(CAMERA_MOVE_SPEED * dt);
+        cameraRef.position.add(moveDir);
     }
-
-    if (inputState.keys.forward) moveDirection.add(forward);
-    if (inputState.keys.back) moveDirection.sub(forward);
-    if (inputState.keys.right && hasRight) moveDirection.add(right);
-    if (inputState.keys.left && hasRight) moveDirection.sub(right);
-    if (inputState.keys.up) moveDirection.add(UNIT_Y);
-    if (inputState.keys.down) moveDirection.sub(UNIT_Y);
-
-    if (moveDirection.lengthSq() === 0) return;
-
-    moveDirection.normalize().multiplyScalar(CAMERA_MOVE_SPEED * dt);
-    cameraRef.position.add(moveDirection);
 }
 
 export function createGraph({ state, config, element, onNodeClick, onLinkClick, onBackgroundClick }) {
@@ -447,6 +438,10 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
     }
 
     cameraRef = graphRef.camera();
+    if (cameraRef) {
+        cameraRef.rotation.order = 'YXZ';
+        cameraRef.rotation.setFromQuaternion(cameraRef.quaternion, 'YXZ');
+    }
 
     initInputHandlers(element);
 
@@ -495,13 +490,17 @@ export function animateGraph() {
 
         if (t >= 1) {
             transitionState.active = false;
+
+            if (cameraRef) {
+                cameraRef.rotation.setFromQuaternion(cameraRef.quaternion, 'YXZ');
+            }
         }
     } else {
         processCameraMovement(deltaSeconds);
     }
 
     const time = Date.now() * 0.0015;
-    const elapsed = (now * 0.001) - CLOCK_START;
+    const elapsedSeconds = (now * 0.001) - CLOCK_START;
     const opacity = 0.45 + Math.sin(time) * 0.15;
     const scaleMod = 1.0 + Math.sin(time) * 0.05;
 
@@ -510,7 +509,7 @@ export function animateGraph() {
         if(link.__dust) {
             link.__dust.rotation.z += 0.005;
             if (link.__dustMat && link.__dustMat.uniforms && link.__dustMat.uniforms.uTime) {
-                link.__dustMat.uniforms.uTime.value = elapsed;
+                link.__dustMat.uniforms.uTime.value = elapsedSeconds;
             }
         }
     });
@@ -518,10 +517,10 @@ export function animateGraph() {
     const scene = graphRef.scene();
     const bg = scene.getObjectByName('starfield-bg');
     if (bg) {
-        bg.rotation.y = elapsed * BACKGROUND_ROTATION_SPEED;
+        bg.rotation.y = elapsedSeconds * BACKGROUND_ROTATION_SPEED;
         const stars = bg.children[0];
         if(stars && stars.material.uniforms) {
-            stars.material.uniforms.uTime.value = elapsed;
+            stars.material.uniforms.uTime.value = elapsedSeconds;
         }
     }
 
