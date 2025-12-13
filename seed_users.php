@@ -1,5 +1,4 @@
 <?php
-// seed_users.php
 require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/config/constants.php';
 
@@ -15,8 +14,7 @@ function normalizePair(string $type, int $fromId, int $toId): array {
 }
 
 try {
-    // 1. Clean Database
-    $pdo->beginTransaction();
+    // 1. Clean Database (TRUNCATE causes implicit commit, so we do this BEFORE starting the transaction)
     $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
     $pdo->exec('TRUNCATE TABLE requests');
     $pdo->exec('TRUNCATE TABLE messages');
@@ -24,10 +22,13 @@ try {
     $pdo->exec('TRUNCATE TABLE relationships');
     $pdo->exec('TRUNCATE TABLE users');
     $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
-
+    
     echo "Tables truncated.\n";
 
-    // 2. Generate Users
+    // 2. Start Transaction for Inserts
+    $pdo->beginTransaction();
+
+    // 3. Generate Users
     $totalUsers = 200;
     $firstNames = ['James', 'Mary', 'John', 'Patricia', 'Robert', 'Jennifer', 'Michael', 'Linda', 'William', 'Elizabeth', 'David', 'Barbara', 'Richard', 'Susan', 'Joseph', 'Jessica', 'Thomas', 'Sarah', 'Charles', 'Karen', 'Christopher', 'Nancy', 'Daniel', 'Lisa', 'Matthew', 'Betty', 'Anthony', 'Margaret', 'Mark', 'Sandra'];
     $lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Gonzalez', 'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore', 'Jackson', 'Martin'];
@@ -43,15 +44,12 @@ try {
     for ($i = 1; $i <= $totalUsers; $i++) {
         // Assign to a cluster (0, 1, or 2)
         $cluster = ($i % 3); 
-        // Or random: $cluster = rand(0, 2); 
-        // But modulo ensures balanced distribution.
-        
         $userClusters[$i] = $cluster;
 
         $fname = $firstNames[array_rand($firstNames)];
         $lname = $lastNames[array_rand($lastNames)];
         
-        // Ensure unique username
+        // Ensure unique username by appending ID
         $username = strtolower($fname) . $i; 
         $realName = "$fname $lname";
         
@@ -65,7 +63,7 @@ try {
         $insertUser->execute([$username, $realName, $dob, $passwordHash, $avatar, $signature]);
     }
 
-    // 3. Generate Relationships
+    // 4. Generate Relationships
     echo "Generating relationships (Clusters: Alpha, Beta, Gamma)...\n";
     
     $relationships = [];
@@ -104,7 +102,7 @@ try {
                     }
                 } else {
                     // Undirected Types (DATING, BEST_FRIEND, etc.)
-                    // Normalize to prevent duplicates (though j > i loop helps)
+                    // Normalize to prevent duplicates
                     [$u, $v] = normalizePair($type, $i, $j);
                     $relationships[] = ['from' => $u, 'to' => $v, 'type' => $type];
                 }
@@ -116,19 +114,15 @@ try {
     $insertReq = $pdo->prepare('INSERT INTO requests (from_id, to_id, type, status) VALUES (?, ?, ?, "ACCEPTED")');
 
     foreach ($relationships as $rel) {
-        // Insert Relationship
         $insertRel->execute([$rel['from'], $rel['to'], $rel['type']]);
-        
-        // Create a corresponding Accepted Request so history looks valid
         $insertReq->execute([$rel['from'], $rel['to'], $rel['type']]);
     }
 
     echo "Inserted " . count($relationships) . " relationship edges.\n";
 
-    // 4. Update Signatures with Stats
+    // 5. Update Signatures with Stats
     echo "Updating signatures...\n";
 
-    // Helper to aggregate stats
     $stats = []; 
     // Init stats for all users
     for ($i = 1; $i <= $totalUsers; $i++) {
@@ -141,9 +135,9 @@ try {
     }
 
     // Fetch back confirmed relationships to calculate stats accurately
+    // Note: We are inside a transaction, so we can see our own inserts
     $activeRels = $pdo->query('SELECT from_id, to_id, type FROM relationships WHERE deleted_at IS NULL')->fetchAll();
     
-    // Identify mutual crushes
     $crushEdges = [];
 
     foreach ($activeRels as $row) {
@@ -161,7 +155,6 @@ try {
             if (!isset($crushEdges[$key])) $crushEdges[$key] = 0;
             $crushEdges[$key]++;
         } else {
-            // Other types (FRIEND, BEEFING, BROTHER, SISTER) -> grouping as 'friends/connections'
             $stats[$u]['friends']++;
             $stats[$v]['friends']++;
         }
@@ -181,7 +174,6 @@ try {
     foreach ($stats as $id => $s) {
         $clusterName = $clusterNames[$userClusters[$id]];
         
-        // Format: [Alpha] ❤️ 1 | 💍 0 | 🤝 5
         $sigParts = [];
         $sigParts[] = "[$clusterName]";
         
@@ -202,6 +194,6 @@ try {
         $pdo->rollBack();
     }
     echo "Seed failed: " . $e->getMessage() . "\n";
-    echo $e->getTraceAsString();
+    // echo $e->getTraceAsString(); 
 }
 ?>
