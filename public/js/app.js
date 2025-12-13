@@ -8,7 +8,8 @@ if (!window.APP_CONFIG) {
 
 const CONFIG = window.APP_CONFIG ? {
     pollInterval: 3000,
-    relStyles: window.APP_CONFIG.RELATION_STYLES
+    relStyles: window.APP_CONFIG.RELATION_STYLES,
+    directedTypes: window.APP_CONFIG.DIRECTED_RELATION_TYPES || []
 } : null;
 
 const RELATION_TYPES = window.APP_CONFIG ? (window.APP_CONFIG.RELATION_TYPES || []) : [];
@@ -26,7 +27,8 @@ export const State = {
     etag: null,
     activeChats: new Set(),
     lastUpdate: null,
-    nodeById: new Map()
+    nodeById: new Map(),
+    selectedNodeId: null
 };
 
 let Graph = null;
@@ -146,6 +148,14 @@ function applyGraphPayload(data) {
     if (nodeDisplay) nodeDisplay.innerText = `${State.graphData.nodes.length} Nodes`;
 
     State.lastUpdate = data.last_update || State.lastUpdate;
+
+    if (State.selectedNodeId) {
+        const updatedNode = State.nodeById.get(State.selectedNodeId);
+        const panel = document.getElementById('inspector-panel');
+        if (updatedNode && panel && panel.style.display !== 'none') {
+            showNodeInspector(updatedNode);
+        }
+    }
 }
 
 function mergeGraphData(nodes, links, incremental = false) {
@@ -265,7 +275,7 @@ function mergeGraphData(nodes, links, incremental = false) {
     directedBuckets.forEach((linksForPair) => {
         if (linksForPair.length < 2) {
             linksForPair.forEach(l => {
-                l.displayLabel = `${getRelLabel(l.type)} →`;
+                l.displayLabel = getRelLabel(l.type);
                 l.hideLabel = false;
             });
             return;
@@ -291,7 +301,7 @@ function mergeGraphData(nodes, links, incremental = false) {
         }
 
         linksForPair.forEach(l => {
-            l.displayLabel = `${getRelLabel(l.type)} →`;
+            l.displayLabel = getRelLabel(l.type);
             l.hideLabel = false;
         });
     });
@@ -301,7 +311,7 @@ function mergeGraphData(nodes, links, incremental = false) {
             link.displayLabel = getRelLabel(link.type);
             link.hideLabel = false;
         } else if (!link.displayLabel) {
-            link.displayLabel = `${getRelLabel(link.type)} →`;
+            link.displayLabel = getRelLabel(link.type);
             link.hideLabel = false;
         }
     });
@@ -354,6 +364,7 @@ function applyLastMessages(lastMessages) {
 }
 
 function handleNodeClick(node) {
+    State.selectedNodeId = node.id;
     const dist = 150;
     const v = new THREE.Vector3(node.x, node.y, node.z || 0);
     if (v.lengthSq() === 0) v.set(0, 0, 1);
@@ -404,6 +415,7 @@ function handleLinkClick(link) {
 }
 
 function resetFocus() {
+    State.selectedNodeId = null;
     State.highlightNodes.clear();
     State.highlightLinks.clear();
     State.highlightLink = null;
