@@ -236,8 +236,11 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
 
             const arrow = group.children ? group.children.find(c => c.name === 'direction-cone') : null;
             if (arrow) {
+                const link = group.userData.link;
+                const isDirected = !!(link && configRef && Array.isArray(configRef.directedTypes) && configRef.directedTypes.includes(link.type));
                 const dist = vStart.distanceTo(vEnd);
-                if (dist > 10) {
+
+                if (dist > 10 && isDirected) {
                     arrow.visible = true;
 
                     const dir = group.userData._dir.copy(vEnd).sub(vStart);
