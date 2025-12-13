@@ -5,7 +5,6 @@ const CLOCK_START = performance.now() * 0.001;
 const MAX_DUST = 400;
 const UNIT_Z = new THREE.Vector3(0, 0, 1);
 const UNIT_Y = new THREE.Vector3(0, 1, 0);
-const UNIT_X = new THREE.Vector3(1, 0, 0);
 const CAMERA_MOVE_SPEED = 350;
 const SCROLL_SPEED = 50;
 const ROTATION_SPEED = 0.002;
@@ -20,7 +19,6 @@ let lastFrameTime = null;
 let cameraRef = null;
 let inputHandlersInitialized = false;
 const textureCache = new Map();
-const linkTextureCache = new Map();
 let isDragging = false;
 
 const transitionState = {
@@ -390,11 +388,6 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
                 }
             }
 
-            const label = group.children ? group.children.find(c => c.name === 'link-label') : null;
-            if (label && dist > 0.001) {
-                const dir = group.userData._dir.copy(vEnd).sub(vStart).normalize();
-                label.quaternion.setFromUnitVectors(UNIT_X, dir);
-            }
         })
         .onNodeClick(onNodeClick)
         .onLinkClick(onLinkClick)
@@ -653,47 +646,6 @@ function createSpaceDust(color) {
     return points;
 }
 
-function createLinkTextTexture(text, color = 'lightgrey') {
-    const cacheKey = `${text}|${color}`;
-
-    if (linkTextureCache.has(cacheKey)) {
-        return linkTextureCache.get(cacheKey);
-    }
-
-    const padding = 16;
-    const font = 'bold 64px "Fredoka", "Varela Round", "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-
-    ctx.font = font;
-    const metrics = ctx.measureText(text);
-    const textWidth = Math.ceil(metrics.width);
-    const textHeight = Math.ceil(metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent);
-
-    canvas.width = textWidth + padding * 2;
-    canvas.height = Math.max(64, textHeight + padding * 2);
-
-    ctx.font = font;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = color;
-    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.minFilter = THREE.LinearFilter;
-    texture.magFilter = THREE.LinearFilter;
-    texture.needsUpdate = true;
-
-    const result = {
-        texture,
-        width: canvas.width,
-        height: canvas.height
-    };
-
-    linkTextureCache.set(cacheKey, result);
-    return result;
-}
-
 function nodeRenderer(node) {
     const cacheKey = `${node.avatar}|${node.id === stateRef.userId ? 'self' : 'other'}|${node.name || ''}`;
     if (!textureCache.has(cacheKey)) {
@@ -811,19 +763,13 @@ function linkRenderer(link) {
     group.add(cone2);
 
     const labelText = link.displayLabel || (style ? style.label : link.type);
-    const labelColor = style ? style.color : 'lightgrey';
-    const labelTextureData = createLinkTextTexture(labelText, labelColor);
-    const labelMaterial = new THREE.MeshBasicMaterial({ map: labelTextureData.texture, transparent: true, side: THREE.DoubleSide });
-    labelMaterial.depthWrite = false;
-
-    const aspect = labelTextureData.width / labelTextureData.height;
-    const textHeight = 6.5;
-    const labelGeometry = new THREE.PlaneGeometry(textHeight * aspect, textHeight);
-    const labelMesh = new THREE.Mesh(labelGeometry, labelMaterial);
-    labelMesh.name = 'link-label';
-    labelMesh.visible = link.hideLabel ? false : true;
-    labelMesh.renderOrder = 2;
-    group.add(labelMesh);
+    const sprite = new window.SpriteText(labelText);
+    sprite.color = style ? style.color : 'lightgrey';
+    sprite.textHeight = 6.5;
+    sprite.name = 'link-label';
+    sprite.visible = link.hideLabel ? false : true;
+    sprite.renderOrder = 2;
+    group.add(sprite);
 
     return group;
 }
