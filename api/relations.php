@@ -251,7 +251,7 @@ try {
         }
 
         $placeholders = implode(',', array_fill(0, count($idsToDelete), '?'));
-        $del = $pdo->prepare("UPDATE relationships SET deleted_at = NOW(6) WHERE id IN ($placeholders)");
+        $del = $pdo->prepare("UPDATE relationships SET deleted_at = NOW(6), updated_at = NOW(6) WHERE id IN ($placeholders)");
         $del->execute($idsToDelete);
 
         respond(true, ['message' => 'Relationship removed']);
