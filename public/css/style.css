@@ -1,7 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Noto+Sans+SC:wght@400;700&family=Varela+Round&family=Fredoka:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Varela+Round&family=Fredoka:wght@400;700&display=swap');
 
 /* public/css/style.css */
-body { margin: 0; overflow: hidden; font-family: 'Orbitron', 'Noto Sans SC', 'Segoe UI', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif; background: #000; color: white; }
+body { margin: 0; overflow: hidden; font-family: 'Noto Sans SC', 'Segoe UI', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif; background: #000; color: white; }
 
 input, button, select, textarea { font-family: inherit; }
 
@@ -23,6 +23,9 @@ input, button, select, textarea { font-family: inherit; }
 #notif-hud { top: 20px; right: 20px; width: 280px; max-height: 300px; overflow-y: auto; display: none; }
 #inspector-panel { top: 50%; right: 20px; transform: translateY(-50%); width: 300px; display: none; border-left: 4px solid #6366f1; }
 #search-hud { top: 20px; left: 50%; transform: translateX(-50%); width: 320px; }
+#connection-panel { top: 50%; left: 20px; transform: translateY(-50%); width: 250px; max-height: 60vh; display: flex; flex-direction: column; transition: width 0.3s ease, padding 0.3s ease; overflow: hidden; }
+#connection-panel.collapsed { width: 40px; padding: 16px 8px; }
+#connection-panel.collapsed .panel-title, #connection-panel.collapsed #connection-list { display: none; }
 
 
 /* Components */
@@ -111,6 +114,19 @@ input, button, select, textarea { font-family: inherit; }
     justify-content: center;
 }
 .logout-container .btn-secondary { background: #ef4444; }
+
+/* Connection Panel */
+#connection-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+#connection-list::-webkit-scrollbar { width: 6px; }
+#connection-list::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+#connection-list::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); }
+
+.conn-item { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; cursor: pointer; background: rgba(255,255,255,0.05); transition: background 0.2s, transform 0.2s; white-space: nowrap; }
+.conn-item:hover { background: rgba(99, 102, 241, 0.15); transform: translateX(2px); }
+.conn-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid #6366f1; }
+.conn-info { display: flex; flex-direction: column; }
+.conn-name { font-weight: 600; color: #e2e8f0; }
+.conn-empty { color: #94a3b8; font-size: 0.9em; }
 
 /* Toast Notification (Unified in HUD) */
 .toast { cursor: pointer; background: rgba(30, 41, 59, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); padding: 12px 16px; border-radius: 8px; color: white; font-size: 0.9em; box-shadow: 0 2px 10px rgba(0,0,0,0.3); opacity: 0; transform: translateY(-10px); transition: all 0.3s ease; display: block; width: 100%; box-sizing: border-box; }

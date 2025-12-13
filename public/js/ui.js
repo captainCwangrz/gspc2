@@ -40,6 +40,22 @@ export function initUI({ state, config, relationTypes: relTypes, refreshData }) 
         });
     }
 
+    const connToggleBtn = document.getElementById('conn-toggle-btn');
+    const connPanel = document.getElementById('connection-panel');
+    if (connToggleBtn && connPanel) {
+        const isCollapsed = localStorage.getItem('connPanelCollapsed') === 'true';
+        if (isCollapsed) {
+            connPanel.classList.add('collapsed');
+            connToggleBtn.textContent = '▶';
+        }
+
+        connToggleBtn.addEventListener('click', () => {
+            const collapsed = connPanel.classList.toggle('collapsed');
+            connToggleBtn.textContent = collapsed ? '▶' : '◀';
+            localStorage.setItem('connPanelCollapsed', collapsed);
+        });
+    }
+
     window.sendRequest = sendRequest;
     window.updateRel = updateRel;
     window.acceptReq = acceptReq;
@@ -133,6 +149,46 @@ export function updateNotificationHUD(nodes = []) {
         list.appendChild(div);
     });
     updateHudVisibility();
+}
+
+export function updateConnectionPanel() {
+    const list = document.getElementById('connection-list');
+    const panel = document.getElementById('connection-panel');
+    if (!list || !panel || !State) return;
+
+    const myId = State.userId;
+    const connectedIds = new Set();
+
+    (State.graphData.links || []).forEach(link => {
+        const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+        const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+
+        if (sourceId === myId && targetId !== myId) connectedIds.add(targetId);
+        if (targetId === myId && sourceId !== myId) connectedIds.add(sourceId);
+    });
+
+    const connections = (State.graphData.nodes || []).filter(n => connectedIds.has(n.id));
+    connections.sort((a, b) => {
+        const lastA = a.last_msg_id || 0;
+        const lastB = b.last_msg_id || 0;
+        if (lastA !== lastB) return lastB - lastA;
+        const nameA = a.name || '';
+        const nameB = b.name || '';
+        return nameA.localeCompare(nameB);
+    });
+
+    const html = connections.length > 0
+        ? connections.map(node => `
+            <div class="conn-item" onclick="window.openChat(${node.id})">
+                <img src="${node.avatar}" class="conn-avatar">
+                <div class="conn-info">
+                    <div class="conn-name">${escapeHtml(node.name)}</div>
+                </div>
+            </div>
+        `).join('')
+        : '<div class="conn-empty">No connections yet.</div>';
+
+    list.innerHTML = html;
 }
 
 function zoomToUser(userId) {
