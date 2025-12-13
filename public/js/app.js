@@ -293,9 +293,9 @@ function mergeGraphData(nodes, links, incremental = false) {
         });
 
         if (forward && backward && forward.type === backward.type && forward.type === 'CRUSH') {
-            forward.displayLabel = `${getRelLabel(forward.type)} ↔`;
+            forward.displayLabel = `${getRelLabel(forward.type)}`;
             forward.hideLabel = false;
-            backward.displayLabel = `${getRelLabel(backward.type)} ↔`;
+            backward.displayLabel = `${getRelLabel(backward.type)}`;
             backward.hideLabel = true;
             return;
         }

@@ -607,20 +607,19 @@ function linkRenderer(link) {
         link.__dustMat = dust.material;
     }
 
-    if (configRef.directedTypes && configRef.directedTypes.includes(link.type)) {
-        const color = style ? style.color : '#fff';
-        const geo = new THREE.ConeGeometry(2, 6, 8);
-        const mat = new THREE.MeshBasicMaterial({ color });
-        const cone = new THREE.Mesh(geo, mat);
-        cone.name = 'direction-cone';
-        cone.visible = false;
-        group.add(cone);
-    }
+    const color = style ? style.color : '#fff';
+    const geo = new THREE.ConeGeometry(2, 6, 8);
+    const mat = new THREE.MeshBasicMaterial({ color });
+    const cone = new THREE.Mesh(geo, mat);
+    cone.name = 'direction-cone';
+    cone.visible = false;
+    group.add(cone);
 
     const sprite = new SpriteText(link.displayLabel || (style ? style.label : link.type));
     sprite.fontFace = '"Fredoka", "Varela Round", "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
     sprite.color = style ? style.color : 'lightgrey';
-    sprite.textHeight = 4.5;
+    sprite.textHeight = 6.5;
+    sprite.fontWeight = 'bold';
     sprite.backgroundColor = 'rgba(0,0,0,0)';
     sprite.padding = 2;
     if(sprite.material) sprite.material.depthWrite = false;
