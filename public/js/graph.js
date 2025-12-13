@@ -270,6 +270,12 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
     const controls = graphRef.controls();
     if (controls) {
         controls.enabled = false;
+
+        if (typeof controls.dispose === 'function') {
+            controls.dispose();
+        }
+
+        controls.update = () => {};
     }
 
     const camera = controls && controls.object ? controls.object : null;
@@ -332,10 +338,10 @@ export function animateGraph() {
             flyControls.update(deltaSeconds);
         }
 
-        const controls = graphRef.controls();
-        if (controls) {
-            controls.update();
-        }
+        // const controls = graphRef.controls();
+        // if (controls) {
+        //     controls.update();
+        // }
     }
 
     requestAnimationFrame(animateGraph);
