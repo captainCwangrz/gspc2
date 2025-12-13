@@ -282,7 +282,7 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
     if (camera && renderer) {
         flyControls = new FlyControls(camera, renderer.domElement);
         flyControls.movementSpeed = 400;
-        flyControls.rollSpeed = Math.PI / 24;
+        flyControls.rollSpeed = Math.PI / 3;
         flyControls.dragToLook = true;
     }
 
