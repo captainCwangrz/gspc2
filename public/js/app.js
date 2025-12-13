@@ -1,5 +1,5 @@
 import { fetchGraphData, syncReadReceipts } from './api.js';
-import { createGraph, animateGraph, initStarfieldBackground, disposeLinkVisual } from './graph.js';
+import { createGraph, animateGraph, initStarfieldBackground, disposeLinkVisual, transitionCamera } from './graph.js';
 import { initUI, updateRequestsUI, updateNotificationHUD, showToast, escapeHtml, getRelLabel } from './ui.js';
 
 if (!window.APP_CONFIG) {
@@ -372,7 +372,7 @@ function handleNodeClick(node) {
     const camPos = v.clone().normalize().multiplyScalar(dist).add(v);
     camPos.y += 40;
 
-    Graph.cameraPosition(
+    transitionCamera(
         { x: camPos.x, y: camPos.y, z: camPos.z },
         node,
         1500
@@ -420,7 +420,7 @@ function resetFocus() {
     State.highlightLinks.clear();
     State.highlightLink = null;
 
-    Graph.cameraPosition({ x: 0, y: 0, z: 800 }, { x: 0, y: 0, z: 0 }, 1500);
+    transitionCamera({ x: 0, y: 0, z: 800 }, { x: 0, y: 0, z: 0 }, 1500);
 
     Graph.nodeColor(Graph.nodeColor());
     Graph.linkColor(Graph.linkColor());

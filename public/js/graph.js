@@ -14,6 +14,7 @@ let configRef;
 let graphRef = null;
 let lastFrameTime = null;
 let flyControls = null;
+let isTransitioning = false;
 const textureCache = new Map();
 const linkTextureCache = new Map();
 
@@ -23,7 +24,7 @@ function isFormFieldActive() {
     if (!active) return false;
 
     const tagName = active.tagName ? active.tagName.toLowerCase() : '';
-    const isFormField = ['input', 'textarea', 'select', 'button'].includes(tagName);
+    const isFormField = ['input', 'textarea', 'select'].includes(tagName);
 
     return isFormField || active.isContentEditable;
 }
@@ -296,6 +297,23 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
     return graphRef;
 }
 
+export function transitionCamera(pos, lookAt, duration = 1500) {
+    if (!graphRef) return;
+
+    isTransitioning = true;
+
+    graphRef.cameraPosition(pos, lookAt, duration);
+
+    setTimeout(() => {
+        isTransitioning = false;
+
+        if (flyControls) {
+            flyControls.movementVector = new THREE.Vector3(0, 0, 0);
+            flyControls.rotationVector = new THREE.Vector3(0, 0, 0);
+        }
+    }, duration + 50);
+}
+
 export function animateGraph() {
     if (!graphRef || !stateRef) return;
 
@@ -340,7 +358,7 @@ export function animateGraph() {
     }
 
     if (graphRef) {
-        if (flyControls) {
+        if (flyControls && !isTransitioning) {
             flyControls.enabled = !isFormFieldActive();
             flyControls.update(deltaSeconds);
         }
