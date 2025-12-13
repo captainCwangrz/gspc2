@@ -8,6 +8,8 @@ const UNIT_Y = new THREE.Vector3(0, 1, 0);
 const CAMERA_MOVE_SPEED = 350;
 const SCROLL_SPEED = 50;
 const ROTATION_SPEED = 0.002;
+let sharedConeGeometry = new THREE.ConeGeometry(2, 6, 8);
+const sharedMaterials = new Map();
 
 const PI_HALF = Math.PI / 2;
 const MAX_PITCH = PI_HALF - 0.1; // ~85 degrees
@@ -750,14 +752,13 @@ function linkRenderer(link) {
     }
 
     const color = style ? style.color : '#fff';
-    const geo = new THREE.ConeGeometry(2, 6, 8);
-    const mat = new THREE.MeshBasicMaterial({ color });
-    const cone = new THREE.Mesh(geo, mat);
+    const mat = getSharedConeMaterial(color);
+    const cone = new THREE.Mesh(getSharedConeGeometry(), mat);
     cone.name = 'direction-cone';
     cone.visible = false;
     group.add(cone);
 
-    const cone2 = new THREE.Mesh(geo, mat);
+    const cone2 = new THREE.Mesh(getSharedConeGeometry(), mat);
     cone2.name = 'reverse-direction-cone';
     cone2.visible = false;
     group.add(cone2);
@@ -774,6 +775,22 @@ function linkRenderer(link) {
     return group;
 }
 
+function getSharedConeMaterial(color) {
+    if (!sharedMaterials.has(color)) {
+        sharedMaterials.set(color, new THREE.MeshBasicMaterial({ color }));
+    }
+
+    return sharedMaterials.get(color);
+}
+
+function getSharedConeGeometry() {
+    if (!sharedConeGeometry) {
+        sharedConeGeometry = new THREE.ConeGeometry(2, 6, 8);
+    }
+
+    return sharedConeGeometry;
+}
+
 export function getGraph() {
     return graphRef;
 }
@@ -785,6 +802,7 @@ export function destroyGraph() {
     stateRef = null;
     configRef = null;
     lastFrameTime = null;
+    disposeSharedConeResources();
 }
 
 export function disposeLinkVisual(link) {
@@ -814,6 +832,13 @@ export function disposeLinkVisual(link) {
     }
 
     group.children.slice().forEach(child => {
+        if (child.name === 'direction-cone' || child.name === 'reverse-direction-cone') {
+            if (child.parent) {
+                child.parent.remove(child);
+            }
+            return;
+        }
+
         if (child.geometry && typeof child.geometry.dispose === 'function') {
             child.geometry.dispose();
         }
@@ -827,4 +852,18 @@ export function disposeLinkVisual(link) {
     }
 
     delete link.__group;
+}
+
+function disposeSharedConeResources() {
+    if (sharedConeGeometry && typeof sharedConeGeometry.dispose === 'function') {
+        sharedConeGeometry.dispose();
+    }
+    sharedConeGeometry = null;
+
+    sharedMaterials.forEach(mat => {
+        if (!mat) return;
+        if (mat.map && typeof mat.map.dispose === 'function') mat.map.dispose();
+        if (typeof mat.dispose === 'function') mat.dispose();
+    });
+    sharedMaterials.clear();
 }
