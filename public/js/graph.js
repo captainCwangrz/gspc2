@@ -1,5 +1,3 @@
-import { FlyControls } from 'three/addons/controls/FlyControls.js';
-
 const STAR_TWINKLE_SPEED = 2.8;
 const BACKGROUND_ROTATION_SPEED = 0.01;
 const STAR_TWINKLE_AMPLITUDE = 0.9;
@@ -8,15 +6,32 @@ const MAX_DUST = 400;
 const UNIT_Z = new THREE.Vector3(0, 0, 1);
 const UNIT_Y = new THREE.Vector3(0, 1, 0);
 const UNIT_X = new THREE.Vector3(1, 0, 0);
+const CAMERA_MOVE_SPEED = 350;
+const ROTATION_SPEED = 0.0025;
 
 let stateRef;
 let configRef;
 let graphRef = null;
 let lastFrameTime = null;
-let flyControls = null;
 let isTransitioning = false;
+let cameraRef = null;
+let inputHandlersInitialized = false;
 const textureCache = new Map();
 const linkTextureCache = new Map();
+
+const inputState = {
+    keys: {
+        forward: false,
+        back: false,
+        left: false,
+        right: false,
+        up: false,
+        down: false
+    },
+    mouse: {
+        isDown: false
+    }
+};
 
 function isFormFieldActive() {
     if (typeof document === 'undefined') return false;
@@ -136,6 +151,117 @@ const STAR_ANTI_FLICKER_FRAGMENT_SHADER = `
         gl_FragColor = vec4(finalColor, alpha * vOpacity);
     }
 `;
+
+
+function resetInputState() {
+    inputState.keys.forward = false;
+    inputState.keys.back = false;
+    inputState.keys.left = false;
+    inputState.keys.right = false;
+    inputState.keys.up = false;
+    inputState.keys.down = false;
+    inputState.mouse.isDown = false;
+}
+
+function initInputHandlers(element) {
+    if (!element || inputHandlersInitialized) return;
+
+    const updateKeyState = (code, isPressed) => {
+        switch (code) {
+            case 'KeyW':
+                inputState.keys.forward = isPressed;
+                break;
+            case 'KeyS':
+                inputState.keys.back = isPressed;
+                break;
+            case 'KeyA':
+                inputState.keys.left = isPressed;
+                break;
+            case 'KeyD':
+                inputState.keys.right = isPressed;
+                break;
+            case 'Space':
+                inputState.keys.up = isPressed;
+                break;
+            case 'ShiftLeft':
+            case 'ShiftRight':
+                inputState.keys.down = isPressed;
+                break;
+            default:
+                break;
+        }
+    };
+
+    const onKeyDown = event => {
+        if (isFormFieldActive()) return;
+        updateKeyState(event.code, true);
+    };
+
+    const onKeyUp = event => {
+        updateKeyState(event.code, false);
+    };
+
+    const onMouseDown = () => {
+        inputState.mouse.isDown = true;
+    };
+
+    const onMouseUp = () => {
+        inputState.mouse.isDown = false;
+    };
+
+    const onMouseMove = event => {
+        if (!inputState.mouse.isDown || !cameraRef) return;
+
+        const yawDelta = -event.movementX * ROTATION_SPEED;
+        const pitchDelta = -event.movementY * ROTATION_SPEED;
+
+        if (yawDelta !== 0) {
+            const yawQuat = new THREE.Quaternion().setFromAxisAngle(UNIT_Y, yawDelta);
+            cameraRef.quaternion.premultiply(yawQuat);
+        }
+
+        if (pitchDelta !== 0) {
+            const pitchAxis = new THREE.Vector3(1, 0, 0).applyQuaternion(cameraRef.quaternion).normalize();
+            const pitchQuat = new THREE.Quaternion().setFromAxisAngle(pitchAxis, pitchDelta);
+            cameraRef.quaternion.multiply(pitchQuat);
+        }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    element.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mouseup', onMouseUp);
+    element.addEventListener('mousemove', onMouseMove);
+
+    inputHandlersInitialized = true;
+}
+
+function processCameraMovement(dt) {
+    if (!graphRef || !cameraRef || isTransitioning) return;
+    if (isFormFieldActive()) return;
+
+    const moveDirection = new THREE.Vector3();
+    const forward = new THREE.Vector3();
+    cameraRef.getWorldDirection(forward).normalize();
+
+    const right = new THREE.Vector3().crossVectors(forward, UNIT_Y);
+    const hasRight = right.lengthSq() > 0.000001;
+    if (hasRight) {
+        right.normalize();
+    }
+
+    if (inputState.keys.forward) moveDirection.add(forward);
+    if (inputState.keys.back) moveDirection.sub(forward);
+    if (inputState.keys.right && hasRight) moveDirection.add(right);
+    if (inputState.keys.left && hasRight) moveDirection.sub(right);
+    if (inputState.keys.up) moveDirection.add(UNIT_Y);
+    if (inputState.keys.down) moveDirection.sub(UNIT_Y);
+
+    if (moveDirection.lengthSq() === 0) return;
+
+    moveDirection.normalize().multiplyScalar(CAMERA_MOVE_SPEED * dt);
+    cameraRef.position.add(moveDirection);
+}
 
 export function createGraph({ state, config, element, onNodeClick, onLinkClick, onBackgroundClick }) {
     stateRef = state;
@@ -286,13 +412,9 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
         controls.update = () => {};
     }
 
-    const camera = controls && controls.object ? controls.object : null;
-    if (camera && renderer) {
-        flyControls = new FlyControls(camera, renderer.domElement);
-        flyControls.movementSpeed = 350;
-        flyControls.rollSpeed = Math.PI / 3;
-        flyControls.dragToLook = true;
-    }
+    cameraRef = controls && controls.object ? controls.object : null;
+
+    initInputHandlers(element);
 
     return graphRef;
 }
@@ -302,15 +424,12 @@ export function transitionCamera(pos, lookAt, duration = 1500) {
 
     isTransitioning = true;
 
+    resetInputState();
+
     graphRef.cameraPosition(pos, lookAt, duration);
 
     setTimeout(() => {
         isTransitioning = false;
-
-        if (flyControls) {
-            flyControls.movementVector = new THREE.Vector3(0, 0, 0);
-            flyControls.rotationVector = new THREE.Vector3(0, 0, 0);
-        }
     }, duration + 50);
 }
 
@@ -331,6 +450,8 @@ export function animateGraph() {
 
     const deltaSeconds = (now - lastFrameTime) * 0.001;
     lastFrameTime = now;
+
+    processCameraMovement(deltaSeconds);
 
     const time = Date.now() * 0.0015;
     const elapsed = (now * 0.001) - CLOCK_START;
@@ -358,11 +479,6 @@ export function animateGraph() {
     }
 
     if (graphRef) {
-        if (flyControls && !isTransitioning) {
-            flyControls.enabled = !isFormFieldActive();
-            flyControls.update(deltaSeconds);
-        }
-
         // const controls = graphRef.controls();
         // if (controls) {
         //     controls.update();
@@ -678,10 +794,8 @@ export function getGraph() {
 }
 
 export function destroyGraph() {
-    if (flyControls && typeof flyControls.dispose === 'function') {
-        flyControls.dispose();
-    }
-    flyControls = null;
+    resetInputState();
+    cameraRef = null;
     graphRef = null;
     stateRef = null;
     configRef = null;
