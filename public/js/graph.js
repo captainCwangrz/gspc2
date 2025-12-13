@@ -1,8 +1,9 @@
+import { FlyControls } from 'three/addons/controls/FlyControls.js';
+
 const STAR_TWINKLE_SPEED = 2.8;
 const BACKGROUND_ROTATION_SPEED = 0.01;
 const STAR_TWINKLE_AMPLITUDE = 0.9;
 const CLOCK_START = performance.now() * 0.001;
-const CAMERA_MOVE_SPEED = 360;
 const MAX_DUST = 400;
 const UNIT_Z = new THREE.Vector3(0, 0, 1);
 const UNIT_Y = new THREE.Vector3(0, 1, 0);
@@ -11,10 +12,8 @@ let stateRef;
 let configRef;
 let graphRef = null;
 let lastFrameTime = null;
+let flyControls = null;
 const textureCache = new Map();
-const movementKeys = new Set(['w', 'a', 's', 'd']);
-const pressedKeys = { w: false, a: false, s: false, d: false };
-let removeMovementListeners = null;
 
 function isFormFieldActive() {
     if (typeof document === 'undefined') return false;
@@ -25,46 +24,6 @@ function isFormFieldActive() {
     const isFormField = ['input', 'textarea', 'select', 'button'].includes(tagName);
 
     return isFormField || active.isContentEditable;
-}
-
-function cleanupMovementHandlers() {
-    if (removeMovementListeners) {
-        removeMovementListeners();
-    }
-}
-
-function setupMovementHandlers() {
-    if (typeof window === 'undefined') return;
-
-    cleanupMovementHandlers();
-
-    const onKeyDown = (event) => {
-        if (isFormFieldActive()) return;
-        const key = event.key ? event.key.toLowerCase() : '';
-        if (movementKeys.has(key)) {
-            pressedKeys[key] = true;
-        }
-    };
-
-    const onKeyUp = (event) => {
-        const key = event.key ? event.key.toLowerCase() : '';
-        if (movementKeys.has(key)) {
-            pressedKeys[key] = false;
-        }
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-
-    removeMovementListeners = () => {
-        window.removeEventListener('keydown', onKeyDown);
-        window.removeEventListener('keyup', onKeyUp);
-        pressedKeys.w = false;
-        pressedKeys.a = false;
-        pressedKeys.s = false;
-        pressedKeys.d = false;
-        removeMovementListeners = null;
-    };
 }
 
 function buildStarVertexShader() {
@@ -310,16 +269,16 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
 
     const controls = graphRef.controls();
     if (controls) {
-        controls.minDistance = 0;
-        controls.maxDistance = 2000;
-        controls.enableDamping = true;
-        controls.dampingFactor = 0.1;
-        controls.enablePan = true;
-        controls.enableRotate = true;
-        controls.enableZoom = true;
+        controls.enabled = false;
     }
 
-    setupMovementHandlers();
+    const camera = controls && controls.object ? controls.object : null;
+    if (camera && renderer) {
+        flyControls = new FlyControls(camera, renderer.domElement);
+        flyControls.movementSpeed = 400;
+        flyControls.rollSpeed = Math.PI / 24;
+        flyControls.dragToLook = true;
+    }
 
     return graphRef;
 }
@@ -368,30 +327,12 @@ export function animateGraph() {
     }
 
     if (graphRef) {
-        const controls = graphRef.controls();
-        const camera = controls && controls.object ? controls.object : null;
-
-        if (controls && camera) {
-            const forward = new THREE.Vector3();
-            camera.getWorldDirection(forward);
-            const right = forward.clone().cross(camera.up);
-
-            forward.normalize();
-            if (right.lengthSq() > 0) right.normalize();
-
-            const movement = new THREE.Vector3();
-            if (pressedKeys.w) movement.add(forward);
-            if (pressedKeys.s) movement.sub(forward);
-            if (pressedKeys.d) movement.add(right);
-            if (pressedKeys.a) movement.sub(right);
-
-            if (movement.lengthSq() > 0 && deltaSeconds > 0) {
-                movement.normalize().multiplyScalar(CAMERA_MOVE_SPEED * deltaSeconds);
-                camera.position.add(movement);
-                controls.target.add(movement);
-            }
+        if (flyControls) {
+            flyControls.enabled = !isFormFieldActive();
+            flyControls.update(deltaSeconds);
         }
 
+        const controls = graphRef.controls();
         if (controls) {
             controls.update();
         }
@@ -661,7 +602,10 @@ export function getGraph() {
 }
 
 export function destroyGraph() {
-    cleanupMovementHandlers();
+    if (flyControls && typeof flyControls.dispose === 'function') {
+        flyControls.dispose();
+    }
+    flyControls = null;
     graphRef = null;
     stateRef = null;
     configRef = null;
