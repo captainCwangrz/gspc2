@@ -509,9 +509,10 @@ function showNodeInspector(node) {
         }
 
         if(canManageRelationship) {
-            const options = RELATION_TYPES.map(t =>
-                `<option value="${t}" ${activeRel.type === t ? 'selected' : ''}>${getRelLabel(t)}</option>`
-            ).join('');
+            const options = RELATION_TYPES
+                .filter(t => t !== activeRel.type)
+                .map(t => `<option value="${t}">${getRelLabel(t)}</option>`)
+                .join('');
 
             actionHtml = `
                 <div style="margin-top:10px; padding:8px; background:rgba(255,255,255,0.1); border-radius:4px; text-align:center;">

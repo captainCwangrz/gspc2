@@ -35,6 +35,7 @@ if (!$currentUser) {
         "imports": {
             "three": "https://esm.sh/three@0.181.2",
             "three/": "https://esm.sh/three@0.181.2/",
+            "three/addons/": "https://esm.sh/three@0.181.2/examples/jsm/",
             "three-spritetext": "https://esm.sh/three-spritetext@1.10.0?external=three",
             "3d-force-graph": "https://esm.sh/3d-force-graph@1.79.0?external=three"
         }
