@@ -33,8 +33,11 @@ if(isset($_SESSION["user_id"])) {
                         if($_GET['error']=='username_exists') echo "Username already taken.";
                         if($_GET['error']=='invalid_username_format') echo "Username must be 3-20 chars (letters, numbers, _).";
                         if($_GET['error']=='password_too_short') echo "Password must be at least 8 characters.";
+                        if($_GET['error']=='password_mismatch') echo "Passwords do not match.";
                         if($_GET['error']=='name_too_long') echo "Real name is too long.";
                         if($_GET['error']=='invalid_date') echo "Date of birth must be in YYYY-MM-DD format.";
+                        if($_GET['error']=='invalid_date_future') echo "Date of birth cannot be in the future.";
+                        if($_GET['error']=='invalid_age') echo "You must be between 13 and 120 years old to register.";
                         if($_GET['error']=='missing_fields') echo "Please complete all required fields.";
                         if($_GET['error']=='unknown') echo "An unknown error occurred.";
                     ?>
@@ -53,7 +56,10 @@ if(isset($_SESSION["user_id"])) {
 
                 <div class="form-group">
                     <label>Password</label>
-                    <input type="password" name="password" required placeholder="Enter password">
+                    <div class="password-wrapper">
+                        <input type="password" name="password" required placeholder="Enter password">
+                        <button type="button" class="password-toggle-icon" aria-label="Show password">👁️</button>
+                    </div>
                 </div>
 
                 <button type="submit" class="btn-primary">Login</button>
@@ -88,7 +94,18 @@ if(isset($_SESSION["user_id"])) {
 
                 <div class="form-group">
                     <label>Password</label>
-                    <input type="password" name="password" required placeholder="Choose a password">
+                    <div class="password-wrapper">
+                        <input type="password" name="password" required placeholder="Choose a password">
+                        <button type="button" class="password-toggle-icon" aria-label="Show password">👁️</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Confirm Password</label>
+                    <div class="password-wrapper">
+                        <input type="password" name="confirm_password" required placeholder="Confirm your password">
+                        <button type="button" class="password-toggle-icon" aria-label="Show password">👁️</button>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -107,5 +124,26 @@ if(isset($_SESSION["user_id"])) {
             </form>
         </div>
     </div>
+    <script>
+        const toggleIcons = document.querySelectorAll('.password-toggle-icon');
+
+        toggleIcons.forEach((icon) => {
+            const input = icon.closest('.password-wrapper').querySelector('input[type="password"], input[type="text"]');
+
+            const showPassword = () => {
+                input.type = 'text';
+            };
+
+            const hidePassword = () => {
+                input.type = 'password';
+            };
+
+            icon.addEventListener('mousedown', showPassword);
+            icon.addEventListener('mouseup', hidePassword);
+            icon.addEventListener('mouseleave', hidePassword);
+            icon.addEventListener('touchstart', (e) => { e.preventDefault(); showPassword(); });
+            icon.addEventListener('touchend', (e) => { e.preventDefault(); hidePassword(); });
+        });
+    </script>
 </body>
 </html>

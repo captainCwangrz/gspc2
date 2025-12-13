@@ -46,6 +46,7 @@ if ($action === "login") {
 if ($action === "register") {
     $real_name = trim($_POST["real_name"] ?? "");
     $dob = $_POST["dob"] ?? "";
+    $confirm_password = $_POST["confirm_password"] ?? "";
 
     if (!$username || !$password || !$real_name || !$dob) {
         header("Location: ../index.php?error=missing_fields");
@@ -62,6 +63,11 @@ if ($action === "register") {
         exit;
     }
 
+    if ($password !== $confirm_password) {
+        header("Location: ../index.php?error=password_mismatch");
+        exit;
+    }
+
     $realNameLength = function_exists('mb_strlen') ? mb_strlen($real_name, 'UTF-8') : strlen($real_name);
     if ($realNameLength > 50) {
         header("Location: ../index.php?error=name_too_long");
@@ -72,6 +78,19 @@ if ($action === "register") {
     $d = DateTime::createFromFormat('Y-m-d', $dob);
     if (!$d || $d->format('Y-m-d') !== $dob) {
         header("Location: ../index.php?error=invalid_date");
+        exit;
+    }
+
+    $now = new DateTime();
+    $age = $now->diff($d)->y;
+
+    if ($d > $now) {
+        header("Location: ../index.php?error=invalid_date_future");
+        exit;
+    }
+
+    if ($age < 13 || $age > 120) {
+        header("Location: ../index.php?error=invalid_age");
         exit;
     }
 
