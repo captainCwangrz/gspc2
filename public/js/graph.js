@@ -7,6 +7,7 @@ const CLOCK_START = performance.now() * 0.001;
 const MAX_DUST = 400;
 const UNIT_Z = new THREE.Vector3(0, 0, 1);
 const UNIT_Y = new THREE.Vector3(0, 1, 0);
+const UNIT_X = new THREE.Vector3(1, 0, 0);
 
 let stateRef;
 let configRef;
@@ -14,6 +15,7 @@ let graphRef = null;
 let lastFrameTime = null;
 let flyControls = null;
 const textureCache = new Map();
+const linkTextureCache = new Map();
 
 function isFormFieldActive() {
     if (typeof document === 'undefined') return false;
@@ -161,6 +163,7 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
 
             const vStart = group.userData._vStart.set(start.x, start.y, start.z);
             const vEnd = group.userData._vEnd.set(end.x, end.y, end.z);
+            const dist = vStart.distanceTo(vEnd);
 
             group.position.set(
                 start.x + (end.x - start.x) / 2,
@@ -170,7 +173,6 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
 
             const dustContainer = group.children ? group.children.find(c => c.name === 'dust-container') : null;
             if (dustContainer) {
-                const dist = vStart.distanceTo(vEnd);
                 if (dist > 0.001) {
                     const dir = group.userData._dir.copy(vEnd).sub(vStart).normalize();
                     dustContainer.quaternion.setFromUnitVectors(UNIT_Z, dir);
@@ -199,7 +201,6 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
             if (arrow && arrowRev) {
                 const link = group.userData.link;
                 const isDirected = !!(link && configRef && Array.isArray(configRef.directedTypes) && configRef.directedTypes.includes(link.type));
-                const dist = vStart.distanceTo(vEnd);
 
                 if (dist > 10) {
                     const dir = group.userData._dir.copy(vEnd).sub(vStart);
@@ -235,6 +236,12 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
                     arrow.visible = false;
                     arrowRev.visible = false;
                 }
+            }
+
+            const label = group.children ? group.children.find(c => c.name === 'link-label') : null;
+            if (label && dist > 0.001) {
+                const dir = group.userData._dir.copy(vEnd).sub(vStart).normalize();
+                label.quaternion.setFromUnitVectors(UNIT_X, dir);
             }
         })
         .onNodeClick(onNodeClick)
@@ -473,6 +480,47 @@ function createSpaceDust(color) {
     return points;
 }
 
+function createLinkTextTexture(text, color = 'lightgrey') {
+    const cacheKey = `${text}|${color}`;
+
+    if (linkTextureCache.has(cacheKey)) {
+        return linkTextureCache.get(cacheKey);
+    }
+
+    const padding = 16;
+    const font = 'bold 64px "Fredoka", "Varela Round", "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+
+    ctx.font = font;
+    const metrics = ctx.measureText(text);
+    const textWidth = Math.ceil(metrics.width);
+    const textHeight = Math.ceil(metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent);
+
+    canvas.width = textWidth + padding * 2;
+    canvas.height = Math.max(64, textHeight + padding * 2);
+
+    ctx.font = font;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = color;
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.needsUpdate = true;
+
+    const result = {
+        texture,
+        width: canvas.width,
+        height: canvas.height
+    };
+
+    linkTextureCache.set(cacheKey, result);
+    return result;
+}
+
 function nodeRenderer(node) {
     const cacheKey = `${node.avatar}|${node.id === stateRef.userId ? 'self' : 'other'}|${node.name || ''}`;
     if (!textureCache.has(cacheKey)) {
@@ -589,16 +637,20 @@ function linkRenderer(link) {
     cone2.visible = false;
     group.add(cone2);
 
-    const sprite = new SpriteText(link.displayLabel || (style ? style.label : link.type));
-    sprite.fontFace = '"Fredoka", "Varela Round", "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
-    sprite.color = style ? style.color : 'lightgrey';
-    sprite.textHeight = 6.5;
-    sprite.fontWeight = 'bold';
-    sprite.backgroundColor = 'rgba(0,0,0,0)';
-    sprite.padding = 2;
-    if(sprite.material) sprite.material.depthWrite = false;
-    sprite.visible = link.hideLabel ? false : true;
-    group.add(sprite);
+    const labelText = link.displayLabel || (style ? style.label : link.type);
+    const labelColor = style ? style.color : 'lightgrey';
+    const labelTextureData = createLinkTextTexture(labelText, labelColor);
+    const labelMaterial = new THREE.MeshBasicMaterial({ map: labelTextureData.texture, transparent: true, side: THREE.DoubleSide });
+    labelMaterial.depthWrite = false;
+
+    const aspect = labelTextureData.width / labelTextureData.height;
+    const textHeight = 6.5;
+    const labelGeometry = new THREE.PlaneGeometry(textHeight * aspect, textHeight);
+    const labelMesh = new THREE.Mesh(labelGeometry, labelMaterial);
+    labelMesh.name = 'link-label';
+    labelMesh.visible = link.hideLabel ? false : true;
+    labelMesh.renderOrder = 2;
+    group.add(labelMesh);
 
     return group;
 }
