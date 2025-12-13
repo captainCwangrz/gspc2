@@ -37,11 +37,21 @@ class Database {
     // Initialize System: Create DB and Tables
     public static function initSystem() {
         try {
-            $pdo = new PDO("mysql:host=".self::$host, self::$user, self::$pass);
+            $pdo = new PDO(
+                "mysql:host=" . self::$host,
+                self::$user,
+                self::$pass,
+                [
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                ]
+            );
             $pdo->exec("CREATE DATABASE IF NOT EXISTS `" . self::$db . "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
 
             $dsn = "mysql:host=" . self::$host . ";dbname=" . self::$db . ";charset=utf8mb4";
-            self::$pdo = new PDO($dsn, self::$user, self::$pass);
+            self::$pdo = new PDO($dsn, self::$user, self::$pass, [
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            ]);
 
             $sql = <<<SQL
                 CREATE TABLE IF NOT EXISTS users (
