@@ -44,7 +44,7 @@ if (!$currentUser) {
             "three/examples/jsm/postprocessing/UnrealBloomPass": "https://esm.sh/three@0.181.2/examples/jsm/postprocessing/UnrealBloomPass?external=three",
             "three-spritetext": "https://esm.sh/three-spritetext@1.10.0?external=three",
             "3d-force-graph": "https://esm.sh/3d-force-graph@1.79.0?external=three",
-            "d3-force-3d": "https://esm.sh/d3-force-3d@3.0.0",
+            "d3-force-3d": "https://esm.sh/d3-force-3d@3",
             "./public/js/app.js": "./public/js/app.js?v=<?= $v ?>",
             "./public/js/api.js": "./public/js/api.js?v=<?= $v ?>",
             "./public/js/graph.js": "./public/js/graph.js?v=<?= $v ?>",
