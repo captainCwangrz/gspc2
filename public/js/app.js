@@ -402,12 +402,18 @@ function resetGhosting() {
 
     const data = Graph.graphData();
     (data.nodes || []).forEach(node => {
-        fadeObjectOpacity(node.__threeObj, 1);
+        if (node.__threeObj) {
+            node.__threeObj.visible = true;
+            fadeObjectOpacity(node.__threeObj, 1);
+        }
     });
 
     (data.links || []).forEach(link => {
-        fadeObjectOpacity(link.__lineObj, 1);
-        fadeObjectOpacity(link.__group, 1);
+        if (link.__lineObj) link.__lineObj.visible = true;
+        if (link.__group) {
+            link.__group.visible = true;
+            fadeObjectOpacity(link.__group, 1);
+        }
     });
 }
 
@@ -429,14 +435,24 @@ function applyFocusGhosting(centerNodeId) {
     });
 
     (Graph.graphData().nodes || []).forEach(node => {
-        const targetOpacity = neighborIds.has(node.id) ? 1 : 0.1;
-        fadeObjectOpacity(node.__threeObj, targetOpacity);
+        const isNeighbor = neighborIds.has(node.id);
+        if (node.__threeObj) {
+            node.__threeObj.visible = isNeighbor;
+            if (isNeighbor) fadeObjectOpacity(node.__threeObj, 1);
+        }
     });
 
     (Graph.graphData().links || []).forEach(link => {
-        const targetOpacity = neighborLinks.has(link) ? 1 : 0.1;
-        fadeObjectOpacity(link.__lineObj, targetOpacity);
-        fadeObjectOpacity(link.__group, targetOpacity);
+        const isNeighbor = neighborLinks.has(link);
+        if (link.__group) {
+            link.__group.visible = isNeighbor;
+            fadeObjectOpacity(link.__group, isNeighbor ? 1 : 0);
+        }
+
+        if (link.__lineObj) {
+            link.__lineObj.visible = isNeighbor;
+            fadeObjectOpacity(link.__lineObj, isNeighbor ? 1 : 0);
+        }
     });
 }
 

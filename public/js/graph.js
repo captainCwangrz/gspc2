@@ -455,11 +455,13 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
     const renderer = graphRef.renderer && graphRef.renderer();
     if (renderer) {
         renderer.useLegacyLights = false;
+        renderer.toneMapping = THREE.ReinhardToneMapping;
+        renderer.toneMappingExposure = 1.5;
     }
 
     const composer = graphRef.postProcessingComposer && graphRef.postProcessingComposer();
     if (composer) {
-        const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.1);
+        const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.2, 0.4, 0.85);
         composer.addPass(bloom);
     }
 
@@ -572,11 +574,25 @@ export function animateGraph() {
         }
     }
 
-    const distFromOrigin = cameraRef ? cameraRef.position.length() : 0;
-    const shouldShowLabels = distFromOrigin <= 600;
-    if (shouldShowLabels !== showLabels) {
-        showLabels = shouldShowLabels;
-        updateLinkLabelVisibility();
+    // Update label visibility based on proximity to the specific link
+    if (cameraRef && stateRef.graphData && stateRef.graphData.links) {
+        const camPos = cameraRef.position;
+        const LABEL_VISIBLE_DIST = 500;
+
+        stateRef.graphData.links.forEach(link => {
+            const label = link.__label || (link.__group && link.__group.children.find(c => c.name === 'link-label'));
+            if (label) {
+                if (link.hideLabel) {
+                    label.visible = false;
+                } else {
+                    const linkPos = link.__group ? link.__group.position : null;
+                    if (linkPos) {
+                        const dist = camPos.distanceTo(linkPos);
+                        label.visible = dist < LABEL_VISIBLE_DIST;
+                    }
+                }
+            }
+        });
     }
 
     requestAnimationFrame(animateGraph);
