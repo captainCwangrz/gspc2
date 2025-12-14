@@ -11,7 +11,9 @@ const CAMERA_MOVE_SPEED = 350;
 const SCROLL_SPEED = 50;
 const ROTATION_SPEED = 0.002;
 let sharedConeGeometry = new THREE.ConeGeometry(2, 6, 8);
+// CACHES
 const sharedMaterials = new Map();
+const glowTextureCache = new Map(); // Cache for the generic glow texture
 
 const PI_HALF = Math.PI / 2;
 const MAX_PITCH = PI_HALF - 0.1; // ~85 degrees
@@ -27,6 +29,43 @@ const textureCache = new Map();
 let isDragging = false;
 let hoveredNode = null;
 let hoveredLink = null;
+
+// Helper: Cone Material Cache (Opacity Aware)
+function getSharedConeMaterial(color, opacity = 1) {
+    const opKey = Number(opacity).toFixed(1);
+    const key = `${color}_${opKey}`;
+
+    if (!sharedMaterials.has(key)) {
+        sharedMaterials.set(key, new THREE.MeshBasicMaterial({
+            color: color,
+            transparent: true,
+            opacity: parseFloat(opKey)
+        }));
+    }
+    return sharedMaterials.get(key);
+}
+
+// Helper: Generate a Generic Glow Texture (Reusable)
+function getGlowTexture() {
+    if (!glowTextureCache.has('generic_glow')) {
+        const size = 64; // Small texture is fine for a soft glow
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+
+        const gradient = ctx.createRadialGradient(size / 2, size / 2, size * 0.1, size / 2, size / 2, size * 0.5);
+        gradient.addColorStop(0, 'rgba(139, 92, 246, 0.8)'); // Violet core
+        gradient.addColorStop(1, 'rgba(139, 92, 246, 0)');   // Fade out
+
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, size, size);
+
+        const tex = new THREE.CanvasTexture(canvas);
+        glowTextureCache.set('generic_glow', tex);
+    }
+    return glowTextureCache.get('generic_glow');
+}
 
 const transitionState = {
     active: false,
@@ -595,7 +634,7 @@ export function animateGraph() {
     // Update label visibility based on proximity to the specific link
     if (cameraRef && stateRef.graphData && stateRef.graphData.links) {
         const camPos = cameraRef.position;
-        const LABEL_VISIBLE_DIST = 250;
+        const LABEL_VISIBLE_DIST = 500;
 
         stateRef.graphData.links.forEach(link => {
             const label = link.__label || (link.__group && link.__group.children.find(c => c.name === 'link-label'));
@@ -628,10 +667,7 @@ export function animateGraph() {
     const graphLinks = (stateRef.graphData && stateRef.graphData.links) ? stateRef.graphData.links : [];
 
     graphLinks.forEach(link => {
-        // 1. Determine Target Opacity (Dimmed vs Highlighted)
-        let targetOpacity = 0.4; // Default dimmed state
-
-        // If hovered or connected to hovered node, bring to full brightness
+        let targetOpacity = 0.4;
         const sId = typeof link.source === 'object' ? link.source.id : link.source;
         const tId = typeof link.target === 'object' ? link.target.id : link.target;
 
@@ -640,19 +676,24 @@ export function animateGraph() {
         } else if (hoveredLink && link === hoveredLink) targetOpacity = 1.0;
         else if (hoveredNode && (hoveredNode.id === sId || hoveredNode.id === tId)) targetOpacity = 1.0;
 
-        // 2. Apply to PARTICLE BEAMS (The Shader Fix)
+        // Dust
         if (link.__dustMat && link.__dustMat.uniforms) {
             link.__dustMat.uniforms.uOpacity.value = targetOpacity;
         }
 
-        // 3. Apply to ARROWS/CONES (Standard Material)
+        // Cones (Efficient)
         if (link.__group) {
             link.__group.children.forEach(child => {
-                // Ignore labels here (handled by visibility logic below)
                 if (child.name === 'link-label') return; 
 
-                // Fade cones/arrows
-                if (child.material) child.material.opacity = targetOpacity;
+                if (child.name === 'direction-cone' || child.name === 'reverse-direction-cone') {
+                     // Check delta to avoid map lookups
+                     if (Math.abs(child.material.opacity - targetOpacity) > 0.05) {
+                        const style = configRef.relStyles[link.type];
+                        const color = style ? style.color : '#fff';
+                        child.material = getSharedConeMaterial(color, targetOpacity);
+                     }
+                }
             });
         }
     });
@@ -788,7 +829,11 @@ function createSpaceDust(color) {
 }
 
 function nodeRenderer(node) {
-    const cacheKey = `${node.avatar}|${node.id === stateRef.userId ? 'self' : 'other'}|${node.name || ''}|v5`;
+    const group = new THREE.Group();
+
+    // 1. AVATAR SPRITE (Texture: 256x256)
+    const cacheKey = `${node.avatar}|${node.id === stateRef.userId ? 'self' : 'other'}|${node.name || ''}|v8`;
+
     if (!textureCache.has(cacheKey)) {
         const size = 256;
         const canvas = document.createElement('canvas');
@@ -798,53 +843,44 @@ function nodeRenderer(node) {
         const texture = new THREE.CanvasTexture(canvas);
 
         const draw = (img = null) => {
-            ctx.clearRect(0,0,size,size);
+            ctx.clearRect(0, 0, size, size);
 
-            const avatarRadius = size * 0.35;
-            const avatarY = size * 0.40;
+            // Layout Calculation
+            const avatarRadius = size * 0.30; // ~77px
+            const avatarY = size * 0.40;      // ~102px from top
 
-            if (node.id === stateRef.userId) {
-                const glowRadius = avatarRadius * 1.8;
-                const glow = ctx.createRadialGradient(size / 2, avatarY, avatarRadius * 0.25, size / 2, avatarY, glowRadius);
-                glow.addColorStop(0, 'rgba(139, 92, 246, 0.45)');
-                glow.addColorStop(1, 'rgba(139, 92, 246, 0)');
-                ctx.fillStyle = glow;
-                ctx.beginPath();
-                ctx.arc(size / 2, avatarY, glowRadius, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
+            // Draw Avatar Clip
             ctx.save();
             ctx.beginPath();
             ctx.arc(size / 2, avatarY, avatarRadius, 0, 2 * Math.PI);
             ctx.clip();
 
-            if(img) {
+            if (img) {
                 ctx.drawImage(img, size / 2 - avatarRadius, avatarY - avatarRadius, avatarRadius * 2, avatarRadius * 2);
             } else {
+                // Fallback Initials
                 ctx.fillStyle = '#0f172a';
                 ctx.fillRect(size / 2 - avatarRadius, avatarY - avatarRadius, avatarRadius * 2, avatarRadius * 2);
                 ctx.fillStyle = 'white';
-                ctx.font = 'bold 220px "Noto Sans SC", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif';
+                ctx.font = 'bold 100px "Noto Sans SC", sans-serif';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillText((node.name || '').charAt(0).toUpperCase(), size / 2, avatarY);
             }
             ctx.restore();
 
+            // Draw Nameplate (More space available now!)
             const name = (node.name || '').trim();
-            ctx.font = 'bold 64px "Noto Sans SC", sans-serif';
+            ctx.font = 'bold 42px "Noto Sans SC", sans-serif'; // Clean, readable size
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillStyle = 'white';
-            ctx.shadowColor = 'rgba(0,0,0,0.65)';
-            ctx.shadowBlur = 12;
-            ctx.fillText(name, size / 2, size * 0.82, size * 0.9);
+            ctx.shadowColor = 'rgba(0,0,0,0.8)';
+            ctx.shadowBlur = 8;
+            ctx.fillText(name, size / 2, size * 0.85);
             ctx.shadowBlur = 0;
 
             texture.needsUpdate = true;
-            texture.minFilter = THREE.LinearMipmapLinearFilter;
-            texture.magFilter = THREE.LinearFilter;
         };
 
         const img = new Image();
@@ -854,22 +890,46 @@ function nodeRenderer(node) {
         img.src = node.avatar;
 
         draw(null);
-
         textureCache.set(cacheKey, texture);
     }
 
     const texture = textureCache.get(cacheKey);
-    const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
-    material.depthWrite = false;
-    const sprite = new THREE.Sprite(material);
-    sprite.scale.set(42, 42, 1);
-    sprite.renderOrder = 10;
+    const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    spriteMat.depthWrite = false;
+    const avatarSprite = new THREE.Sprite(spriteMat);
+    
+    // Scale: Maintain original visual size (approx 50-60 units in world space)
+    avatarSprite.scale.set(50, 50, 1);
+    avatarSprite.renderOrder = 10;
+    group.add(avatarSprite);
 
+    // 2. HALO SPRITE (User Only - Rendered Freely)
+    if (node.id === stateRef.userId) {
+        const glowTex = getGlowTexture();
+        const glowMat = new THREE.SpriteMaterial({
+            map: glowTex,
+            transparent: true,
+            opacity: 1.0,
+            depthWrite: false
+        });
+        const haloSprite = new THREE.Sprite(glowMat);
+        
+        // Scale it larger than the avatar sprite
+        haloSprite.scale.set(90, 90, 1);
+        // Move slightly behind to avoid Z-fighting, though renderOrder usually handles it
+        haloSprite.position.set(0, 5, -1);
+        haloSprite.renderOrder = 5; // Render before avatar
+        
+        group.add(haloSprite);
+    }
+
+    // Cleanup helper
     node.dispose = () => {
-        if(material) material.dispose();
+        if(spriteMat) spriteMat.dispose();
+        // We don't dispose the glowMat here as it uses a cached texture/material logic
     };
 
-    return sprite;
+    return group;
 }
 
 function linkRenderer(link) {
@@ -891,7 +951,9 @@ function linkRenderer(link) {
     }
 
     const color = style ? style.color : '#fff';
-    const mat = getSharedConeMaterial(color);
+    
+    // USE CACHE: Start dimmed
+    const mat = getSharedConeMaterial(color, 0.4);
     const cone = new THREE.Mesh(getSharedConeGeometry(), mat);
     cone.name = 'direction-cone';
     cone.visible = false;
@@ -915,14 +977,6 @@ function linkRenderer(link) {
     link.__label = sprite;
 
     return group;
-}
-
-function getSharedConeMaterial(color) {
-    if (!sharedMaterials.has(color)) {
-        sharedMaterials.set(color, new THREE.MeshBasicMaterial({ color }));
-    }
-
-    return sharedMaterials.get(color);
 }
 
 function getSharedConeGeometry() {
