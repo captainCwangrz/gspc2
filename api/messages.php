@@ -3,6 +3,7 @@
 require_once '../config/db.php';
 require_once '../config/auth.php';
 require_once '../config/csrf.php';
+require_once '../config/helpers.php';
 
 header('Content-Type: application/json');
 
@@ -16,18 +17,6 @@ $user_id = $_SESSION["user_id"];
 session_write_close(); // Unblock session
 
 $action = $_POST["action"] ?? $_GET["action"] ?? "";
-
-function isDirectedType(string $type): bool {
-    return in_array($type, DIRECTED_RELATION_TYPES, true);
-}
-
-function normalizeFromTo(string $type, int $from, int $to): array {
-    if (isDirectedType($type)) {
-        return [$from, $to];
-    }
-
-    return [$from < $to ? $from : $to, $from < $to ? $to : $from];
-}
 
 function getActiveRelationships(int $fromId, int $toId, PDO $pdo): array {
     if ($fromId === $toId) return [];

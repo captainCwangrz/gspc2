@@ -1,17 +1,7 @@
 <?php
 require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/config/constants.php';
-
-function isDirectedType(string $type): bool {
-    return in_array($type, DIRECTED_RELATION_TYPES, true);
-}
-
-function normalizePair(string $type, int $fromId, int $toId): array {
-    if (isDirectedType($type)) {
-        return [$fromId, $toId];
-    }
-    return [$fromId < $toId ? $fromId : $toId, $fromId < $toId ? $toId : $fromId];
-}
+require_once __DIR__ . '/config/helpers.php';
 
 try {
     // 1. Clean Database (TRUNCATE causes implicit commit, so we do this BEFORE starting the transaction)
@@ -103,7 +93,7 @@ try {
                 } else {
                     // Undirected Types (DATING, BEST_FRIEND, etc.)
                     // Normalize to prevent duplicates
-                    [$u, $v] = normalizePair($type, $i, $j);
+                    [$u, $v] = normalizeFromTo($type, $i, $j);
                     $relationships[] = ['from' => $u, 'to' => $v, 'type' => $type];
                 }
             }

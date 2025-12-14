@@ -3,6 +3,7 @@
 require_once '../config/db.php';
 require_once '../config/auth.php';
 require_once '../config/csrf.php';
+require_once '../config/helpers.php';
 
 header('Content-Type: application/json');
 
@@ -26,18 +27,6 @@ function respond(bool $success, array $payload = [], int $statusCode = 200): voi
     }
 
     echo json_encode(array_merge(['success' => $success], $payload));
-}
-
-function isDirectedType(string $type): bool {
-    return in_array($type, DIRECTED_RELATION_TYPES, true);
-}
-
-function normalizeFromTo(string $type, int $from, int $to): array {
-    if (isDirectedType($type)) {
-        return [$from, $to];
-    }
-
-    return [$from < $to ? $from : $to, $from < $to ? $to : $from];
 }
 
 function buildRelWhere(string $type, int $fromId, int $toId): array {
@@ -89,8 +78,12 @@ try {
             exit;
         }
 
-        $checkReq = $pdo->prepare('SELECT id FROM requests WHERE from_id = ? AND to_id = ? AND status = "PENDING"');
-        $checkReq->execute([$user_id, $to_id]);
+        $checkReq = $pdo->prepare('
+            SELECT id FROM requests 
+            WHERE ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)) 
+            AND status = "PENDING"
+        ');
+        $checkReq->execute([$user_id, $to_id, $to_id, $user_id]);
 
         if($checkReq->fetch()) {
             respond(false, ['error' => 'Request pending'], 400);
@@ -146,8 +139,12 @@ try {
             exit;
         }
 
-        $checkReq = $pdo->prepare('SELECT id FROM requests WHERE from_id = ? AND to_id = ? AND status = "PENDING"');
-        $checkReq->execute([$user_id, $to_id]);
+        $checkReq = $pdo->prepare('
+            SELECT id FROM requests 
+            WHERE ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)) 
+            AND status = "PENDING"
+        ');
+        $checkReq->execute([$user_id, $to_id, $to_id, $user_id]);
         if ($checkReq->fetch()) {
             respond(false, ['error' => 'Request pending'], 400);
             exit;
