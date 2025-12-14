@@ -294,6 +294,8 @@ function mergeGraphData(nodes, links, incremental = false) {
         });
 
         if (forward && backward && forward.type === backward.type && forward.type === 'CRUSH') {
+            forward.isMutual = true;
+            backward.isMutual = true;
             forward.displayLabel = `${getRelLabel(forward.type)}`;
             forward.hideLabel = false;
             backward.displayLabel = `${getRelLabel(backward.type)}`;
@@ -605,7 +607,7 @@ function showLinkInspector(link) {
 
     const sourceName = escapeHtml(link.source.name);
     const targetName = escapeHtml(link.target.name);
-    const isMutualCrush = link.displayLabel && link.displayLabel.includes('↔');
+    const isMutualCrush = link.isMutual === true;
     const directionLabel = isDirected(link.type) ? (isMutualCrush ? '↔' : '→') : '—';
 
     dataDiv.innerHTML = `

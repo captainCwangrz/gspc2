@@ -502,7 +502,7 @@ export function animateGraph() {
     const links = (stateRef.graphData && stateRef.graphData.links) ? stateRef.graphData.links : [];
     links.forEach(link => {
         if(link.__dust) {
-            link.__dust.rotation.z += 0.005;
+            link.__dust.rotation.z += 0.3 * deltaSeconds;
             if (link.__dustMat && link.__dustMat.uniforms && link.__dustMat.uniforms.uTime) {
                 link.__dustMat.uniforms.uTime.value = elapsedSeconds;
             }
@@ -592,7 +592,7 @@ export function initStarfieldBackground() {
 }
 
 function createSpaceDust(color) {
-    const particleCount = 2000;
+    const particleCount = 400;
     const geo = new THREE.BufferGeometry();
     const pos = [];
     const colors = [];
@@ -686,7 +686,7 @@ function nodeRenderer(node) {
                 ctx.fillStyle = '#0f172a';
                 ctx.fillRect(size / 2 - avatarRadius, avatarY - avatarRadius, avatarRadius * 2, avatarRadius * 2);
                 ctx.fillStyle = 'white';
-                ctx.font = 'bold 220px "Noto Sans SC", sans-serif';
+                ctx.font = 'bold 220px "Noto Sans SC", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillText((node.name || '').charAt(0).toUpperCase(), size / 2, avatarY);
@@ -767,6 +767,7 @@ function linkRenderer(link) {
     const sprite = new window.SpriteText(labelText);
     sprite.color = style ? style.color : 'lightgrey';
     sprite.textHeight = 6.5;
+    sprite.fontFace = '"Noto Sans SC", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif';
     sprite.name = 'link-label';
     sprite.visible = link.hideLabel ? false : true;
     sprite.renderOrder = 2;
