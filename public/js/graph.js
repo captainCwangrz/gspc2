@@ -1,4 +1,3 @@
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
 import * as d3 from 'd3-force-3d';
 
 const STAR_TWINKLE_SPEED = 2.8;
@@ -26,6 +25,8 @@ let showLabels = true;
 let inputHandlersInitialized = false;
 const textureCache = new Map();
 let isDragging = false;
+let hoveredNode = null;
+let hoveredLink = null;
 
 const transitionState = {
     active: false,
@@ -292,38 +293,9 @@ function processCameraMovement(dt) {
     }
 }
 
-function createClusterForce(sectorPositions, strength = 0.15) {
-    let nodes = [];
-
-    const force = (alpha) => {
-        nodes.forEach(node => {
-            const sectorIndex = Math.abs(node.id) % sectorPositions.length;
-            const target = sectorPositions[sectorIndex];
-
-            if (!target) return;
-
-            node.vx += (target.x - node.x) * strength * alpha;
-            node.vy += (target.y - node.y) * strength * alpha;
-            node.vz += (target.z - node.z) * strength * alpha;
-        });
-    };
-
-    force.initialize = (nodeArray) => {
-        nodes = nodeArray || [];
-    };
-
-    return force;
-}
-
 export function createGraph({ state, config, element, onNodeClick, onLinkClick, onBackgroundClick }) {
     stateRef = state;
     configRef = config;
-
-    const SECTOR_POSITIONS = [
-        new THREE.Vector3(260, 0, -60),
-        new THREE.Vector3(-180, 220, 40),
-        new THREE.Vector3(-180, -220, 40)
-    ];
 
     graphRef = ForceGraph3D({
         rendererConfig: { logarithmicDepthBuffer: true, alpha: false }
@@ -427,6 +399,18 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
         .onNodeClick(onNodeClick)
         .onLinkClick(onLinkClick)
         .onBackgroundClick(onBackgroundClick)
+        .onNodeHover(node => {
+            hoveredNode = node || null;
+            if (element && element.style) {
+                element.style.cursor = node ? 'pointer' : 'grab';
+            }
+        })
+        .onLinkHover(link => {
+            hoveredLink = link || null;
+            if (element && element.style) {
+                element.style.cursor = link ? 'pointer' : 'grab';
+            }
+        })
         .onNodeDragEnd(node => {
             node.fx = node.x;
             node.fy = node.y;
@@ -440,14 +424,31 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
     // 1. Increase Repulsion (Charge)
     // Default is usually around -30. Making it more negative (-150)
     // pushes nodes apart more aggressively, expanding the whole cluster.
-    graphRef.d3Force('charge').strength(-220);
+    graphRef.d3Force('charge').strength(node => {
+        const degree = typeof node.degree === 'number' ? node.degree : 0;
+        const baseRepulsion = -120;
+        const degreeMultiplier = -35;
+        return baseRepulsion + degreeMultiplier * degree;
+    });
 
     // 2. Increase Link Distance
     // Default is usually around 30. Increasing this (e.g., to 80 or 100)
     // makes the "strings" connecting nodes longer.
-    graphRef.d3Force('link').distance(130);
+    graphRef.d3Force('link').distance(link => {
+        switch (link.type) {
+            case 'DATING':
+            case 'BEST_FRIEND':
+                return 80;
+            case 'CRUSH':
+            case 'SIBLING':
+                return 140;
+            case 'BEEFING':
+                return 200;
+            default:
+                return 130;
+        }
+    });
 
-    graphRef.d3Force('cluster', createClusterForce(SECTOR_POSITIONS, 0.16));
     graphRef.d3Force('collide', d3.forceCollide(15));
 
     // ---------------------------------------------------------
@@ -457,12 +458,6 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
         renderer.useLegacyLights = false;
         renderer.toneMapping = THREE.LinearToneMapping;
         renderer.toneMappingExposure = 0.9;
-    }
-
-    const composer = graphRef.postProcessingComposer && graphRef.postProcessingComposer();
-    if (composer) {
-        const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.6, 0.3, 0.85);
-        composer.addPass(bloom);
     }
 
     const controls = graphRef.controls();
@@ -520,6 +515,26 @@ function updateLinkLabelVisibility() {
             label.visible = !link.hideLabel && showLabels;
         }
     });
+}
+
+function setObjectOpacity(object3d, targetOpacity) {
+    if (!object3d) return;
+
+    if (typeof object3d.traverse === 'function') {
+        object3d.traverse(child => {
+            if (child.material) {
+                if (Array.isArray(child.material)) {
+                    child.material.forEach(mat => {
+                        mat.transparent = true;
+                        mat.opacity = targetOpacity;
+                    });
+                } else {
+                    child.material.transparent = true;
+                    child.material.opacity = targetOpacity;
+                }
+            }
+        });
+    }
 }
 
 export function animateGraph() {
@@ -591,6 +606,39 @@ export function animateGraph() {
                         label.visible = dist < LABEL_VISIBLE_DIST;
                     }
                 }
+            }
+        });
+    }
+
+    const focusActive = !!stateRef.selectedNodeId;
+    if (!focusActive) {
+        const graphLinks = (stateRef.graphData && stateRef.graphData.links) ? stateRef.graphData.links : [];
+        graphLinks.forEach(link => {
+            const sId = typeof link.source === 'object' ? link.source.id : link.source;
+            const tId = typeof link.target === 'object' ? link.target.id : link.target;
+
+            let targetOpacity = 0.15;
+            if (hoveredLink && link === hoveredLink) {
+                targetOpacity = 1.0;
+            } else if (hoveredNode && (hoveredNode.id === sId || hoveredNode.id === tId)) {
+                targetOpacity = 1.0;
+            }
+
+            if (link.__lineObj && link.__lineObj.material) {
+                const mat = link.__lineObj.material;
+                if (Array.isArray(mat)) {
+                    mat.forEach(m => {
+                        m.transparent = true;
+                        m.opacity = targetOpacity;
+                    });
+                } else {
+                    mat.transparent = true;
+                    mat.opacity = targetOpacity;
+                }
+            }
+
+            if (link.__group) {
+                setObjectOpacity(link.__group, targetOpacity);
             }
         });
     }
@@ -737,7 +785,7 @@ function nodeRenderer(node) {
         const draw = (img = null) => {
             ctx.clearRect(0,0,size,size);
 
-            const avatarRadius = size * 0.28;
+            const avatarRadius = size * 0.35;
             const avatarY = size * 0.45;
 
             if (node.id === stateRef.userId) {
@@ -776,7 +824,7 @@ function nodeRenderer(node) {
             ctx.fillStyle = 'white';
             ctx.shadowColor = 'rgba(0,0,0,0.65)';
             ctx.shadowBlur = 12;
-            ctx.fillText(name, size / 2, size * 0.78, size * 0.9);
+            ctx.fillText(name, size / 2, size * 0.9, size * 0.9);
             ctx.shadowBlur = 0;
 
             texture.needsUpdate = true;
@@ -799,7 +847,7 @@ function nodeRenderer(node) {
     const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
     material.depthWrite = false;
     const sprite = new THREE.Sprite(material);
-    sprite.scale.set(18, 18, 1);
+    sprite.scale.set(24, 24, 1);
     sprite.renderOrder = 10;
 
     node.dispose = () => {

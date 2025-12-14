@@ -105,6 +105,15 @@ function applyGraphPayload(data) {
     const incomingLinks = data.links || [];
 
     const topologyChanged = mergeGraphData(incomingNodes, incomingLinks, data.incremental);
+    State.graphData.nodes.forEach(node => { node.degree = 0; });
+    State.graphData.links.forEach(link => {
+        const sId = typeof link.source === 'object' ? link.source.id : link.source;
+        const tId = typeof link.target === 'object' ? link.target.id : link.target;
+        const sourceNode = State.nodeById.get(sId);
+        const targetNode = State.nodeById.get(tId);
+        if (sourceNode) sourceNode.degree = (sourceNode.degree || 0) + 1;
+        if (targetNode) targetNode.degree = (targetNode.degree || 0) + 1;
+    });
     applyLastMessages(data.last_messages || {});
 
     updateRequestsUI(data.requests || []);
