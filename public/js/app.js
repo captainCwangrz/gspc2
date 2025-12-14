@@ -366,6 +366,80 @@ function applyLastMessages(lastMessages) {
     });
 }
 
+function tweenMaterialOpacity(material, targetOpacity) {
+    if (!material) return;
+
+    material.transparent = true;
+    const start = material.opacity ?? 1;
+    const duration = 180;
+    const startTime = performance.now();
+
+    const step = () => {
+        const t = Math.min(1, (performance.now() - startTime) / duration);
+        material.opacity = THREE.MathUtils.lerp(start, targetOpacity, t);
+        if (t < 1) requestAnimationFrame(step);
+    };
+
+    step();
+}
+
+function fadeObjectOpacity(object3d, targetOpacity) {
+    if (!object3d) return;
+
+    if (Array.isArray(object3d.material)) {
+        object3d.material.forEach(mat => tweenMaterialOpacity(mat, targetOpacity));
+    } else if (object3d.material) {
+        tweenMaterialOpacity(object3d.material, targetOpacity);
+    }
+
+    if (object3d.children && object3d.children.length) {
+        object3d.children.forEach(child => fadeObjectOpacity(child, targetOpacity));
+    }
+}
+
+function resetGhosting() {
+    if (!Graph) return;
+
+    const data = Graph.graphData();
+    (data.nodes || []).forEach(node => {
+        fadeObjectOpacity(node.__threeObj, 1);
+    });
+
+    (data.links || []).forEach(link => {
+        fadeObjectOpacity(link.__lineObj, 1);
+        fadeObjectOpacity(link.__group, 1);
+    });
+}
+
+function applyFocusGhosting(centerNodeId) {
+    if (!Graph) return;
+
+    const neighborIds = new Set([centerNodeId]);
+    const neighborLinks = new Set();
+
+    (Graph.graphData().links || []).forEach(link => {
+        const sId = typeof link.source === 'object' ? link.source.id : link.source;
+        const tId = typeof link.target === 'object' ? link.target.id : link.target;
+
+        if (sId === centerNodeId || tId === centerNodeId) {
+            neighborIds.add(sId);
+            neighborIds.add(tId);
+            neighborLinks.add(link);
+        }
+    });
+
+    (Graph.graphData().nodes || []).forEach(node => {
+        const targetOpacity = neighborIds.has(node.id) ? 1 : 0.1;
+        fadeObjectOpacity(node.__threeObj, targetOpacity);
+    });
+
+    (Graph.graphData().links || []).forEach(link => {
+        const targetOpacity = neighborLinks.has(link) ? 1 : 0.1;
+        fadeObjectOpacity(link.__lineObj, targetOpacity);
+        fadeObjectOpacity(link.__group, targetOpacity);
+    });
+}
+
 function handleNodeClick(node) {
     State.selectedNodeId = node.id;
     const dist = 150;
@@ -399,10 +473,14 @@ function handleNodeClick(node) {
     Graph.nodeColor(Graph.nodeColor());
     Graph.linkColor(Graph.linkColor());
 
+    applyFocusGhosting(node.id);
+
     showNodeInspector(node);
 }
 
 function handleLinkClick(link) {
+    resetGhosting();
+
     State.highlightLinks.clear();
     State.highlightNodes.clear();
 
@@ -422,6 +500,8 @@ function resetFocus() {
     State.highlightNodes.clear();
     State.highlightLinks.clear();
     State.highlightLink = null;
+
+    resetGhosting();
 
     transitionCamera({ x: 0, y: 0, z: 800 }, { x: 0, y: 0, z: 0 }, 1500);
 

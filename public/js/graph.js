@@ -1,3 +1,6 @@
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
+import * as d3 from 'd3-force-3d';
+
 const STAR_TWINKLE_SPEED = 2.8;
 const BACKGROUND_ROTATION_SPEED = 0.01;
 const STAR_TWINKLE_AMPLITUDE = 0.9;
@@ -19,6 +22,7 @@ let configRef;
 let graphRef = null;
 let lastFrameTime = null;
 let cameraRef = null;
+let showLabels = true;
 let inputHandlersInitialized = false;
 const textureCache = new Map();
 let isDragging = false;
@@ -288,9 +292,38 @@ function processCameraMovement(dt) {
     }
 }
 
+function createClusterForce(sectorPositions, strength = 0.15) {
+    let nodes = [];
+
+    const force = (alpha) => {
+        nodes.forEach(node => {
+            const sectorIndex = Math.abs(node.id) % sectorPositions.length;
+            const target = sectorPositions[sectorIndex];
+
+            if (!target) return;
+
+            node.vx += (target.x - node.x) * strength * alpha;
+            node.vy += (target.y - node.y) * strength * alpha;
+            node.vz += (target.z - node.z) * strength * alpha;
+        });
+    };
+
+    force.initialize = (nodeArray) => {
+        nodes = nodeArray || [];
+    };
+
+    return force;
+}
+
 export function createGraph({ state, config, element, onNodeClick, onLinkClick, onBackgroundClick }) {
     stateRef = state;
     configRef = config;
+
+    const SECTOR_POSITIONS = [
+        new THREE.Vector3(260, 0, -60),
+        new THREE.Vector3(-180, 220, 40),
+        new THREE.Vector3(-180, -220, 40)
+    ];
 
     graphRef = ForceGraph3D({
         rendererConfig: { logarithmicDepthBuffer: true }
@@ -414,11 +447,20 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
     // makes the "strings" connecting nodes longer.
     graphRef.d3Force('link').distance(130);
 
+    graphRef.d3Force('cluster', createClusterForce(SECTOR_POSITIONS, 0.16));
+    graphRef.d3Force('collide', d3.forceCollide(15));
+
     // ---------------------------------------------------------
 
     const renderer = graphRef.renderer && graphRef.renderer();
     if (renderer) {
         renderer.useLegacyLights = false;
+    }
+
+    const composer = graphRef.postProcessingComposer && graphRef.postProcessingComposer();
+    if (composer) {
+        const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.1);
+        composer.addPass(bloom);
     }
 
     const controls = graphRef.controls();
@@ -465,6 +507,17 @@ export function transitionCamera(pos, lookAt, duration = 1500) {
 
 function easeCubicInOut(t) {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+function updateLinkLabelVisibility() {
+    const links = (stateRef && stateRef.graphData && Array.isArray(stateRef.graphData.links)) ? stateRef.graphData.links : [];
+
+    links.forEach(link => {
+        const label = link.__label || (link.__group && link.__group.children.find(c => c.name === 'link-label'));
+        if (label) {
+            label.visible = !link.hideLabel && showLabels;
+        }
+    });
 }
 
 export function animateGraph() {
@@ -519,6 +572,13 @@ export function animateGraph() {
         }
     }
 
+    const distFromOrigin = cameraRef ? cameraRef.position.length() : 0;
+    const shouldShowLabels = distFromOrigin <= 600;
+    if (shouldShowLabels !== showLabels) {
+        showLabels = shouldShowLabels;
+        updateLinkLabelVisibility();
+    }
+
     requestAnimationFrame(animateGraph);
 }
 
@@ -551,7 +611,7 @@ export function initStarfieldBackground() {
             const baseColor = new THREE.Color();
             const colorRoll = Math.random();
             const saturation = 0.7 + Math.random() * 0.3;
-            const lightness = 0.45 + Math.random() * 0.3;
+            const lightness = 0.38 + Math.random() * 0.24;
 
             if (colorRoll < 0.35) {
                 baseColor.setHSL(Math.random() * 0.15, saturation, lightness);
@@ -769,9 +829,11 @@ function linkRenderer(link) {
     sprite.textHeight = 6.5;
     sprite.fontFace = '"Noto Sans SC", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif';
     sprite.name = 'link-label';
-    sprite.visible = link.hideLabel ? false : true;
+    sprite.visible = link.hideLabel ? false : showLabels;
     sprite.renderOrder = 2;
     group.add(sprite);
+
+    link.__label = sprite;
 
     return group;
 }
