@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import * as d3 from 'd3-force-3d';
 
 const STAR_TWINKLE_SPEED = 2.8;
