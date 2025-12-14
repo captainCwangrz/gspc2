@@ -33,6 +33,7 @@ export const State = {
 
 let Graph = null;
 let pollTimer = null;
+let hiddenPollSkip = false;
 
 export function initApp(userId) {
     if (!CONFIG || !CONFIG.relStyles) {
@@ -53,6 +54,7 @@ export function initApp(userId) {
     });
 
     window.handleNodeClick = handleNodeClick;
+    window.lookAtNode = lookAtNode;
 
     initUI({ state: State, config: CONFIG, relationTypes: RELATION_TYPES, refreshData: loadGraphData });
 
@@ -78,11 +80,17 @@ async function hydrateReadReceipts() {
 
 async function loadGraphData() {
     if (!CONFIG) return;
-    let nextDelay = CONFIG.pollInterval;
+    let nextDelay = document.hidden ? Math.max(CONFIG.pollInterval, 10000) : CONFIG.pollInterval;
     try {
+        if (document.hidden && hiddenPollSkip) {
+            hiddenPollSkip = false;
+            scheduleNextPoll(nextDelay);
+            return;
+        }
+
         const response = await fetchGraphData({ etag: State.etag, lastUpdate: State.lastUpdate, wait: true });
         if (response.status === 304 || !response.data) {
-            nextDelay = response.timedOut ? 0 : CONFIG.pollInterval;
+            nextDelay = response.timedOut ? 0 : nextDelay;
             return;
         }
 
@@ -91,6 +99,7 @@ async function loadGraphData() {
     } catch (e) {
         console.error('Polling error:', e);
     } finally {
+        hiddenPollSkip = document.hidden ? !hiddenPollSkip : false;
         scheduleNextPoll(nextDelay);
     }
 }
@@ -554,6 +563,19 @@ function handleNodeClick(node) {
     showNodeInspector(node);
 }
 
+export function lookAtNode(nodeId) {
+    const node = State.nodeById.get(nodeId) || State.graphData.nodes.find(n => n.id === nodeId);
+    if (!node) return;
+
+    const dist = 150;
+    const target = new THREE.Vector3(node.x, node.y, node.z || 0);
+    if (target.lengthSq() === 0) target.set(0, 0, 1);
+    const camPos = target.clone().normalize().multiplyScalar(dist).add(target);
+    camPos.y += 40;
+
+    transitionCamera({ x: camPos.x, y: camPos.y, z: camPos.z }, node, 1500);
+}
+
 function handleLinkClick(link) {
     resetGhosting();
 
@@ -601,6 +623,7 @@ function showNodeInspector(node) {
 
     let actionHtml = '';
     let statusHtml = '';
+    const degreeCount = node.degree || 0;
 
     if(node.id !== State.userId) {
         const outgoing = links.find(l => {
@@ -663,76 +686,88 @@ function showNodeInspector(node) {
             }
 
             if (!statusHtml && node.last_msg_id > 0) {
-                statusHtml += `<div style="color:#94a3b8">History available</div>`;
+                statusHtml += `<div class="status-block">History available</div>`;
             }
         }
 
-        if(canManageRelationship) {
-            const options = RELATION_TYPES
-                .filter(t => t !== activeRel.type)
-                .map(t => `<option value="${t}">${getRelLabel(t)}</option>`)
-                .join('');
+        const actionButtons = [];
+        if (canMessage || node.last_msg_id > 0) {
+            actionButtons.push(`<button class="icon-btn" data-action="open-chat" data-user-id="${node.id}">💬<span>Message</span></button>`);
+        }
+        if (canManageRelationship) {
+            actionButtons.push(`<button class="icon-btn danger" data-action="remove-rel" data-user-id="${node.id}">💔<span>Remove</span></button>`);
+        }
 
+        const preferredType = incoming && incoming.type === 'CRUSH' ? 'CRUSH' : null;
+        const baseOptions = canManageRelationship
+            ? RELATION_TYPES.filter(t => t !== activeRel.type)
+            : RELATION_TYPES;
+        const selectOptions = baseOptions
+            .map(t => `<option value="${t}" ${preferredType === t ? 'selected' : ''}>${getRelLabel(t)}</option>`)
+            .join('');
+
+        if (canManageRelationship) {
             actionHtml = `
-                <div style="margin-top:10px; padding:8px; background:rgba(255,255,255,0.1); border-radius:4px; text-align:center;">
-                    ${statusHtml || 'Connected'}
+                ${statusHtml ? `<div class="status-block">${statusHtml}</div>` : ''}
+                <div class="chip-grid">
+                    <div class="chip"><span>Connections</span><strong>${relationsCount}</strong></div>
+                    <div class="chip"><span>Degree</span><strong>${degreeCount}</strong></div>
                 </div>
-
-                <div style="margin-top:8px;">
-                     <select id="update-rel-type" style="width:70%; padding:6px; background:#1e293b; color:white; border:1px solid #475569; border-radius:4px;">
-                        ${options}
+                <div class="inspector-actions">${actionButtons.join('')}</div>
+                <div class="action-form">
+                    <select id="update-rel-type" class="select-compact">
+                        ${selectOptions}
                     </select>
-                    <button class="action-btn" style="width:25%; display:inline-block;" data-action="update-rel" data-user-id="${node.id}">Update</button>
+                    <button class="pill-btn primary" data-action="update-rel" data-user-id="${node.id}">Update</button>
                 </div>
-
-                <button class="action-btn" data-action="open-chat" data-user-id="${node.id}">💬 Message</button>
-                <button class="action-btn" style="background:#ef4444; margin-top:8px;" data-action="remove-rel" data-user-id="${node.id}">💔 Remove</button>
             `;
         } else if (canMessage) {
-            const statusBlock = statusHtml ? `
-                <div style="margin-top:10px; padding:8px; background:rgba(255,255,255,0.1); border-radius:4px; text-align:center;">
-                    ${statusHtml}
-                </div>
-            ` : '';
-            const preferredType = incoming && incoming.type === 'CRUSH' ? 'CRUSH' : null;
-            const options = RELATION_TYPES.map(t => `<option value="${t}" ${preferredType === t ? 'selected' : ''}>Request ${getRelLabel(t)}</option>`).join('');
             actionHtml = `
-                ${statusBlock}
-                <button class="action-btn" data-action="open-chat" data-user-id="${node.id}">💬 Message</button>
-                <select id="req-type" style="width:100%; padding:8px; margin-top:10px; background:#1e293b; color:white; border:1px solid #475569; border-radius:4px;">
-                    ${options}
-                </select>
-                <button class="action-btn" data-action="send-request" data-user-id="${node.id}">🚀 Send Request</button>
+                ${statusHtml ? `<div class="status-block">${statusHtml}</div>` : ''}
+                <div class="chip-grid">
+                    <div class="chip"><span>Connections</span><strong>${relationsCount}</strong></div>
+                    <div class="chip"><span>Degree</span><strong>${degreeCount}</strong></div>
+                </div>
+                <div class="inspector-actions">${actionButtons.join('')}</div>
+                <div class="action-form">
+                    <select id="req-type" class="select-compact">
+                        ${selectOptions}
+                    </select>
+                    <button class="pill-btn primary" data-action="send-request" data-user-id="${node.id}">Request</button>
+                </div>
             `;
         } else {
-            if (node.last_msg_id > 0) {
-                 actionHtml += `
-                    <button class="action-btn" style="background:#64748b; margin-bottom:8px;" data-action="open-chat" data-user-id="${node.id}">📜 History</button>
-                `;
-            }
-
-            const preferredType = incoming && incoming.type === 'CRUSH' ? 'CRUSH' : null;
-            const options = RELATION_TYPES.map(t => `<option value="${t}" ${preferredType === t ? 'selected' : ''}>Request ${getRelLabel(t)}</option>`).join('');
-            actionHtml += `
-                <select id="req-type" style="width:100%; padding:8px; margin-top:10px; background:#1e293b; color:white; border:1px solid #475569; border-radius:4px;">
-                    ${options}
-                </select>
-                <button class="action-btn" data-action="send-request" data-user-id="${node.id}">🚀 Send Request</button>
+            actionHtml = `
+                ${statusHtml ? `<div class="status-block">${statusHtml}</div>` : ''}
+                <div class="chip-grid">
+                    <div class="chip"><span>Connections</span><strong>${relationsCount}</strong></div>
+                    <div class="chip"><span>Degree</span><strong>${degreeCount}</strong></div>
+                </div>
+                <div class="inspector-actions">${actionButtons.join('')}</div>
+                <div class="action-form">
+                    <select id="req-type" class="select-compact">
+                        ${selectOptions}
+                    </select>
+                    <button class="pill-btn primary" data-action="send-request" data-user-id="${node.id}">Send</button>
+                </div>
             `;
         }
     }
 
-    dataDiv.innerHTML = `
-        <img src="${node.avatar}" style="width:80px; height:80px; border-radius:50%; margin:0 auto 10px; display:block; border:3px solid #6366f1;">
-        <div class="inspector-title" style="text-align:center; font-weight:bold; font-size:1.2em;">${escapeHtml(node.name)}</div>
-        <div class="inspector-subtitle" style="text-align:center; color:#94a3b8; font-size:0.9em;">User ID: ${node.id}</div>
-        <div class="inspector-content signature-display" style="background:rgba(0,0,0,0.3); padding:10px; border-radius:8px; margin-top:10px; color:#cbd5e1; font-style:italic; text-align: center;">${escapeHtml(node.signature)}</div>
-        <div class="stat-grid" style="display:grid; grid-template-columns:1fr; gap:8px; margin-top:16px; text-align:center;">
-            <div class="stat-box" style="background:rgba(255,255,255,0.05); padding:8px; border-radius:6px;">
-                <div class="stat-val" style="font-weight:bold; font-size:1.2em;">${relationsCount}</div>
-                <div class="stat-label" style="font-size:0.8em; color:#94a3b8;">Connections</div>
+    if (!actionHtml) {
+        actionHtml = `
+            <div class="chip-grid">
+                <div class="chip"><span>Connections</span><strong>${relationsCount}</strong></div>
+                <div class="chip"><span>Degree</span><strong>${degreeCount}</strong></div>
             </div>
-        </div>
+        `;
+    }
+
+    dataDiv.innerHTML = `
+        <img src="${node.avatar}" class="inspector-avatar">
+        <div class="inspector-title">${escapeHtml(node.name)}</div>
+        <div class="inspector-subtitle">User ID: ${node.id}</div>
+        <div class="inspector-content signature-display">${escapeHtml(node.signature)}</div>
         ${actionHtml}
     `;
 

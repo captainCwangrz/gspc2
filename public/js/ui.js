@@ -34,8 +34,8 @@ export function initUI({ state, config, relationTypes: relTypes, refreshData }) 
     if (zoomBtn) {
         zoomBtn.addEventListener('click', () => {
             const myNode = State.graphData.nodes.find(n => n.id === State.userId);
-            if (myNode && window.handleNodeClick) {
-                window.handleNodeClick(myNode);
+            if (myNode && window.lookAtNode) {
+                window.lookAtNode(myNode.id);
             }
         });
     }
@@ -193,8 +193,8 @@ export function updateConnectionPanel() {
 
 function zoomToUser(userId) {
     const node = State?.graphData?.nodes?.find(user => user.id === userId);
-    if (node && window.handleNodeClick) {
-        window.handleNodeClick(node);
+    if (node && window.lookAtNode) {
+        window.lookAtNode(node.id);
     }
 
     const searchInput = document.getElementById('search-input');

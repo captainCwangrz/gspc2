@@ -1,8 +1,10 @@
 <?php
 // gspc2/index.php
-$v = "1.1.0_" . time(); // Ensures fresh load every request
+require_once 'config/version.php';
 require_once 'config/db.php';
 require_once 'config/csrf.php';
+
+$version = app_version();
 
 if(isset($_SESSION["user_id"])) {
     header("Location: dashboard.php");
@@ -16,7 +18,7 @@ if(isset($_SESSION["user_id"])) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Social-Demo Login</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="public/css/style.css?v=<?= $v ?>">
+    <link rel="stylesheet" href="public/css/style.css?v=<?= $version ?>">
 </head>
 <body class="login-body">
     <div class="login-container">

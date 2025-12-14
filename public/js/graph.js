@@ -121,7 +121,7 @@ function buildStarVertexShader() {
             // This prevents the "core" (0.1 of diameter) from becoming sub-pixel (< 1px).
             // If the core is sub-pixel, rasterization snaps it on/off (flickering).
             // A 4.0px point results in a ~0.8px core, which is stable.
-            gl_PointSize = clamp(projSize, 4.0, 28.0);
+            gl_PointSize = clamp(projSize, 4.0, 64.0);
             vSpriteSize = gl_PointSize;
 
             gl_Position = projectionMatrix * mvPosition;
@@ -832,7 +832,8 @@ function nodeRenderer(node) {
     const group = new THREE.Group();
 
     // 1. AVATAR SPRITE (Texture: 256x256)
-    const cacheKey = `${node.avatar}|${node.id === stateRef.userId ? 'self' : 'other'}|${node.name || ''}|v8`;
+    const versionKey = (window.APP_CONFIG && window.APP_CONFIG.VERSION) ? window.APP_CONFIG.VERSION : '0';
+    const cacheKey = `${node.avatar}|${node.id === stateRef.userId ? 'self' : 'other'}|${node.name || ''}|${versionKey}|v8`;
 
     if (!textureCache.has(cacheKey)) {
         const size = 256;
