@@ -595,7 +595,7 @@ export function animateGraph() {
     // Update label visibility based on proximity to the specific link
     if (cameraRef && stateRef.graphData && stateRef.graphData.links) {
         const camPos = cameraRef.position;
-        const LABEL_VISIBLE_DIST = 500;
+        const LABEL_VISIBLE_DIST = 250;
 
         stateRef.graphData.links.forEach(link => {
             const label = link.__label || (link.__group && link.__group.children.find(c => c.name === 'link-label'));
@@ -629,13 +629,15 @@ export function animateGraph() {
 
     graphLinks.forEach(link => {
         // 1. Determine Target Opacity (Dimmed vs Highlighted)
-        let targetOpacity = 0.15; // Default dimmed state
+        let targetOpacity = 0.4; // Default dimmed state
 
         // If hovered or connected to hovered node, bring to full brightness
         const sId = typeof link.source === 'object' ? link.source.id : link.source;
         const tId = typeof link.target === 'object' ? link.target.id : link.target;
 
-        if (hoveredLink && link === hoveredLink) targetOpacity = 1.0;
+        if (focusActive) {
+            targetOpacity = 1.0;
+        } else if (hoveredLink && link === hoveredLink) targetOpacity = 1.0;
         else if (hoveredNode && (hoveredNode.id === sId || hoveredNode.id === tId)) targetOpacity = 1.0;
 
         // 2. Apply to PARTICLE BEAMS (The Shader Fix)
@@ -786,7 +788,7 @@ function createSpaceDust(color) {
 }
 
 function nodeRenderer(node) {
-    const cacheKey = `${node.avatar}|${node.id === stateRef.userId ? 'self' : 'other'}|${node.name || ''}|v3`;
+    const cacheKey = `${node.avatar}|${node.id === stateRef.userId ? 'self' : 'other'}|${node.name || ''}|v4`;
     if (!textureCache.has(cacheKey)) {
         const size = 256;
         const canvas = document.createElement('canvas');
@@ -799,7 +801,7 @@ function nodeRenderer(node) {
             ctx.clearRect(0,0,size,size);
 
             const avatarRadius = size * 0.35;
-            const avatarY = size * 0.45;
+            const avatarY = size * 0.40;
 
             if (node.id === stateRef.userId) {
                 const glowRadius = avatarRadius * 1.8;
@@ -837,7 +839,7 @@ function nodeRenderer(node) {
             ctx.fillStyle = 'white';
             ctx.shadowColor = 'rgba(0,0,0,0.65)';
             ctx.shadowBlur = 12;
-            ctx.fillText(name, size / 2, size * 0.92, size * 0.9);
+            ctx.fillText(name, size / 2, size * 0.95, size * 0.9);
             ctx.shadowBlur = 0;
 
             texture.needsUpdate = true;
@@ -860,7 +862,7 @@ function nodeRenderer(node) {
     const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
     material.depthWrite = false;
     const sprite = new THREE.Sprite(material);
-    sprite.scale.set(32, 32, 1);
+    sprite.scale.set(42, 42, 1);
     sprite.renderOrder = 10;
 
     node.dispose = () => {

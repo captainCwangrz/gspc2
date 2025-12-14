@@ -213,7 +213,8 @@ function mergeGraphData(nodes, links, incremental = false) {
         return `${s}-${t}`;
     };
 
-    const linkMap = new Map((incremental && !State.isFirstLoad) ? State.graphData.links.map(l => [linkKey(l), l]) : []);
+    const currentLinks = new Map(State.graphData.links.map(l => [linkKey(l), l]));
+    const linkMap = new Map((incremental && !State.isFirstLoad) ? currentLinks : []);
 
     if (!incremental && links.length !== previousLinkCount) {
         hasTopologyChanges = true;
@@ -224,7 +225,7 @@ function mergeGraphData(nodes, links, incremental = false) {
         if (l.deleted === true) {
             const s = typeof l.source === 'object' ? l.source.id : l.source;
             const t = typeof l.target === 'object' ? l.target.id : l.target;
-            const existing = linkMap.get(key);
+            const existing = linkMap.get(key) || currentLinks.get(key);
             if (existing) {
                 disposeLinkVisual(existing);
             }
@@ -232,7 +233,7 @@ function mergeGraphData(nodes, links, incremental = false) {
             linkMap.delete(key);
             if (!isDirected(l.type)) {
                 const reverseKey = `${t}-${s}`;
-                const reverseExisting = linkMap.get(reverseKey);
+                const reverseExisting = linkMap.get(reverseKey) || currentLinks.get(reverseKey);
                 if (reverseExisting) {
                     disposeLinkVisual(reverseExisting);
                 }
@@ -245,10 +246,10 @@ function mergeGraphData(nodes, links, incremental = false) {
             hasTopologyChanges = true;
         }
 
-        const existing = linkMap.get(key) || {};
+        const existing = currentLinks.get(key) || {};
 
         // If type changed (e.g. Request Accepted), flag as topology change
-        if (existing.type !== l.type) {
+        if (existing.type !== undefined && existing.type !== l.type) {
             hasTopologyChanges = true;
 
             disposeLinkVisual(existing);
