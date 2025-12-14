@@ -470,8 +470,8 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
     // pushes nodes apart more aggressively, expanding the whole cluster.
     graphRef.d3Force('charge').strength(node => {
         const degree = typeof node.degree === 'number' ? node.degree : 0;
-        const baseRepulsion = -120;
-        const degreeMultiplier = -35;
+        const baseRepulsion = -180;
+        const degreeMultiplier = -60;
         return baseRepulsion + degreeMultiplier * degree;
     });
 
@@ -482,14 +482,14 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
         switch (link.type) {
             case 'DATING':
             case 'BEST_FRIEND':
-                return 80;
+                return 100;
             case 'CRUSH':
             case 'SIBLING':
-                return 140;
+                return 180;
             case 'BEEFING':
-                return 200;
+                return 350;
             default:
-                return 130;
+                return 160;
         }
     });
 
