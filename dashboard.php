@@ -32,6 +32,24 @@ if (!$currentUser) {
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="stylesheet" href="public/css/style.css?v=<?= $v ?>">
 
+    <style>
+        /* Force override of the 3D graph tooltip */
+        .scene-tooltip {
+            font-family: 'Noto Sans SC', sans-serif !important;
+            font-size: 18px !important;       /* Bigger text */
+            padding: 12px 18px !important;    /* More breathing room */
+            background: rgba(15, 23, 42, 0.95) !important; /* Dark Slate BG */
+            border: 1px solid rgba(148, 163, 184, 0.2) !important;
+            border-radius: 8px !important;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.6) !important;
+            margin-top: 24px !important;      /* Push down from cursor */
+            margin-left: 24px !important;     /* Push right from cursor */
+            color: #fff !important;
+            z-index: 9999 !important;
+            pointer-events: none;             /* Prevent blocking clicks */
+        }
+    </style>
+
     <script type="importmap">
     {
         "imports": {

@@ -135,6 +135,7 @@ function buildDustVertexShader() {
 }
 
 const STAR_FRAGMENT_SHADER = `
+    uniform float uOpacity;
     varying vec3 vColor;
     varying float vOpacity;
     void main() {
@@ -145,7 +146,7 @@ const STAR_FRAGMENT_SHADER = `
         float alpha = (core + halo);
         vec3 boosted = (vColor + vec3(0.12, 0.12, 0.24) * (halo * 2.0)) * (1.12 + halo * 0.12);
         vec3 finalColor = boosted * vOpacity;
-        gl_FragColor = vec4(finalColor, alpha * vOpacity);
+        gl_FragColor = vec4(finalColor, alpha * vOpacity * uOpacity);
     }
 `;
 
@@ -302,7 +303,7 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
     })(element)
         .backgroundColor('#000000')
         .showNavInfo(false)
-        .nodeLabel('name')
+        .nodeLabel(n => `<div class="tooltip-content">${n.name} <span style="color:#94a3b8; font-size:0.8em">@${n.username || ''}</span></div>`)
         .nodeThreeObject(nodeRenderer)
         .linkWidth(link => link === stateRef.highlightLink ? 3.5 : 1.5)
         .linkOpacity(0.6)
@@ -589,6 +590,8 @@ export function animateGraph() {
         }
     }
 
+    const focusActive = !!stateRef.selectedNodeId;
+
     // Update label visibility based on proximity to the specific link
     if (cameraRef && stateRef.graphData && stateRef.graphData.links) {
         const camPos = cameraRef.position;
@@ -597,51 +600,60 @@ export function animateGraph() {
         stateRef.graphData.links.forEach(link => {
             const label = link.__label || (link.__group && link.__group.children.find(c => c.name === 'link-label'));
             if (label) {
-                if (link.hideLabel) {
+                // Force opacity to 1.0 (Labels never dim, they only hide)
+                if (label.material) {
+                    label.material.opacity = 1.0;
+                }
+
+                if (link.hideLabel || !showLabels) {
                     label.visible = false;
                 } else {
-                    const linkPos = link.__group ? link.__group.position : null;
-                    if (linkPos) {
-                        const dist = camPos.distanceTo(linkPos);
-                        label.visible = dist < LABEL_VISIBLE_DIST;
+                    // If Focus Mode is ON: Always show labels (Concept C requirement)
+                    if (focusActive) {
+                        label.visible = true; 
+                    } else {
+                        // Normal Mode: Distance check
+                        const linkPos = link.__group ? link.__group.position : null;
+                        if (linkPos) {
+                             const dist = camPos.distanceTo(linkPos);
+                             label.visible = dist < LABEL_VISIBLE_DIST;
+                        }
                     }
                 }
             }
         });
     }
 
-    const focusActive = !!stateRef.selectedNodeId;
-    if (!focusActive) {
-        const graphLinks = (stateRef.graphData && stateRef.graphData.links) ? stateRef.graphData.links : [];
-        graphLinks.forEach(link => {
-            const sId = typeof link.source === 'object' ? link.source.id : link.source;
-            const tId = typeof link.target === 'object' ? link.target.id : link.target;
+    // We run this logic even if focusActive is true, to handle the "non-focused" items
+    const graphLinks = (stateRef.graphData && stateRef.graphData.links) ? stateRef.graphData.links : [];
 
-            let targetOpacity = 0.15;
-            if (hoveredLink && link === hoveredLink) {
-                targetOpacity = 1.0;
-            } else if (hoveredNode && (hoveredNode.id === sId || hoveredNode.id === tId)) {
-                targetOpacity = 1.0;
-            }
+    graphLinks.forEach(link => {
+        // 1. Determine Target Opacity (Dimmed vs Highlighted)
+        let targetOpacity = 0.15; // Default dimmed state
 
-            if (link.__lineObj && link.__lineObj.material) {
-                const mat = link.__lineObj.material;
-                if (Array.isArray(mat)) {
-                    mat.forEach(m => {
-                        m.transparent = true;
-                        m.opacity = targetOpacity;
-                    });
-                } else {
-                    mat.transparent = true;
-                    mat.opacity = targetOpacity;
-                }
-            }
+        // If hovered or connected to hovered node, bring to full brightness
+        const sId = typeof link.source === 'object' ? link.source.id : link.source;
+        const tId = typeof link.target === 'object' ? link.target.id : link.target;
 
-            if (link.__group) {
-                setObjectOpacity(link.__group, targetOpacity);
-            }
-        });
-    }
+        if (hoveredLink && link === hoveredLink) targetOpacity = 1.0;
+        else if (hoveredNode && (hoveredNode.id === sId || hoveredNode.id === tId)) targetOpacity = 1.0;
+
+        // 2. Apply to PARTICLE BEAMS (The Shader Fix)
+        if (link.__dustMat && link.__dustMat.uniforms) {
+            link.__dustMat.uniforms.uOpacity.value = targetOpacity;
+        }
+
+        // 3. Apply to ARROWS/CONES (Standard Material)
+        if (link.__group) {
+            link.__group.children.forEach(child => {
+                // Ignore labels here (handled by visibility logic below)
+                if (child.name === 'link-label') return; 
+
+                // Fade cones/arrows
+                if (child.material) child.material.opacity = targetOpacity;
+            });
+        }
+    });
 
     requestAnimationFrame(animateGraph);
 }
@@ -756,7 +768,8 @@ function createSpaceDust(color) {
 
     const mat = new THREE.ShaderMaterial({
         uniforms: {
-            uTime: { value: 0 }
+            uTime: { value: 0 },
+            uOpacity: { value: 1.0 }
         },
         vertexShader: buildDustVertexShader(),
         fragmentShader: STAR_FRAGMENT_SHADER,
@@ -773,7 +786,7 @@ function createSpaceDust(color) {
 }
 
 function nodeRenderer(node) {
-    const cacheKey = `${node.avatar}|${node.id === stateRef.userId ? 'self' : 'other'}|${node.name || ''}`;
+    const cacheKey = `${node.avatar}|${node.id === stateRef.userId ? 'self' : 'other'}|${node.name || ''}|v3`;
     if (!textureCache.has(cacheKey)) {
         const size = 256;
         const canvas = document.createElement('canvas');
@@ -824,7 +837,7 @@ function nodeRenderer(node) {
             ctx.fillStyle = 'white';
             ctx.shadowColor = 'rgba(0,0,0,0.65)';
             ctx.shadowBlur = 12;
-            ctx.fillText(name, size / 2, size * 0.9, size * 0.9);
+            ctx.fillText(name, size / 2, size * 0.92, size * 0.9);
             ctx.shadowBlur = 0;
 
             texture.needsUpdate = true;
@@ -847,7 +860,7 @@ function nodeRenderer(node) {
     const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
     material.depthWrite = false;
     const sprite = new THREE.Sprite(material);
-    sprite.scale.set(24, 24, 1);
+    sprite.scale.set(32, 32, 1);
     sprite.renderOrder = 10;
 
     node.dispose = () => {
