@@ -788,7 +788,7 @@ function createSpaceDust(color) {
 }
 
 function nodeRenderer(node) {
-    const cacheKey = `${node.avatar}|${node.id === stateRef.userId ? 'self' : 'other'}|${node.name || ''}|v4`;
+    const cacheKey = `${node.avatar}|${node.id === stateRef.userId ? 'self' : 'other'}|${node.name || ''}|v5`;
     if (!textureCache.has(cacheKey)) {
         const size = 256;
         const canvas = document.createElement('canvas');
@@ -833,13 +833,13 @@ function nodeRenderer(node) {
             ctx.restore();
 
             const name = (node.name || '').trim();
-            ctx.font = 'bold 72px "Noto Sans SC", sans-serif';
+            ctx.font = 'bold 64px "Noto Sans SC", sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillStyle = 'white';
             ctx.shadowColor = 'rgba(0,0,0,0.65)';
             ctx.shadowBlur = 12;
-            ctx.fillText(name, size / 2, size * 0.95, size * 0.9);
+            ctx.fillText(name, size / 2, size * 0.82, size * 0.9);
             ctx.shadowBlur = 0;
 
             texture.needsUpdate = true;

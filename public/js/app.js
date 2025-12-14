@@ -430,38 +430,55 @@ function resetGhosting() {
 function applyFocusGhosting(centerNodeId) {
     if (!Graph) return;
 
-    const neighborIds = new Set([centerNodeId]);
+    const { nodes = [], links = [] } = Graph.graphData();
+
+    const getNeighbors = (nodeId) => {
+        const neighbors = new Set();
+        links.forEach(link => {
+            const sId = typeof link.source === 'object' ? link.source.id : link.source;
+            const tId = typeof link.target === 'object' ? link.target.id : link.target;
+            if (sId === nodeId) neighbors.add(tId);
+            if (tId === nodeId) neighbors.add(sId);
+        });
+        return neighbors;
+    };
+
+    const visibleNodeIds = new Set([centerNodeId]);
     const neighborLinks = new Set();
 
-    (Graph.graphData().links || []).forEach(link => {
+    const degree1 = getNeighbors(centerNodeId);
+    degree1.forEach(id => {
+        visibleNodeIds.add(id);
+        const degree2 = getNeighbors(id);
+        degree2.forEach(id2 => visibleNodeIds.add(id2));
+    });
+
+    links.forEach(link => {
         const sId = typeof link.source === 'object' ? link.source.id : link.source;
         const tId = typeof link.target === 'object' ? link.target.id : link.target;
 
-        if (sId === centerNodeId || tId === centerNodeId) {
-            neighborIds.add(sId);
-            neighborIds.add(tId);
-            neighborLinks.add(link);
-        }
+        const isVisible = visibleNodeIds.has(sId) && visibleNodeIds.has(tId);
+        if (isVisible) neighborLinks.add(link);
     });
 
-    (Graph.graphData().nodes || []).forEach(node => {
-        const isNeighbor = neighborIds.has(node.id);
+    nodes.forEach(node => {
+        const isVisible = visibleNodeIds.has(node.id);
         if (node.__threeObj) {
-            node.__threeObj.visible = isNeighbor;
-            if (isNeighbor) fadeObjectOpacity(node.__threeObj, 1);
+            node.__threeObj.visible = isVisible;
+            if (isVisible) fadeObjectOpacity(node.__threeObj, 1);
         }
     });
 
-    (Graph.graphData().links || []).forEach(link => {
-        const isNeighbor = neighborLinks.has(link);
+    links.forEach(link => {
+        const isVisible = neighborLinks.has(link);
         if (link.__group) {
-            link.__group.visible = isNeighbor;
-            fadeObjectOpacity(link.__group, isNeighbor ? 1 : 0);
+            link.__group.visible = isVisible;
+            fadeObjectOpacity(link.__group, isVisible ? 1 : 0);
         }
 
         if (link.__lineObj) {
-            link.__lineObj.visible = isNeighbor;
-            fadeObjectOpacity(link.__lineObj, isNeighbor ? 1 : 0);
+            link.__lineObj.visible = isVisible;
+            fadeObjectOpacity(link.__lineObj, isVisible ? 1 : 0);
         }
     });
 }
