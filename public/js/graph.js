@@ -456,12 +456,12 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
     if (renderer) {
         renderer.useLegacyLights = false;
         renderer.toneMapping = THREE.LinearToneMapping;
-        renderer.toneMappingExposure = 1.0;
+        renderer.toneMappingExposure = 0.9;
     }
 
     const composer = graphRef.postProcessingComposer && graphRef.postProcessingComposer();
     if (composer) {
-        const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.2, 0.1);
+        const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.6, 0.3, 0.85);
         composer.addPass(bloom);
     }
 
