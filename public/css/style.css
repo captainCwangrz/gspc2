@@ -5,6 +5,12 @@ body { margin: 0; overflow: hidden; font-family: 'Noto Sans SC', 'Segoe UI', 'Se
 
 input, button, select, textarea { font-family: inherit; }
 
+/* Hide Edge's default password reveal and clear buttons */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+    display: none;
+}
+
 /* HUD Common */
 .hud-panel {
     position: absolute;

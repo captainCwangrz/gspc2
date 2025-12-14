@@ -1,5 +1,6 @@
 <?php
 // dashboard.php
+$v = "1.1.0_" . time(); // Ensures fresh load every request
 require_once 'config/db.php';
 require_once 'config/csrf.php';
 
@@ -28,7 +29,7 @@ if (!$currentUser) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= $csrfToken ?>">
     <title>Gossip Chain 3D</title>
-    <link rel="stylesheet" href="public/css/style.css">
+    <link rel="stylesheet" href="public/css/style.css?v=<?= $v ?>">
 
     <script type="importmap">
     {
@@ -37,7 +38,11 @@ if (!$currentUser) {
             "three/": "https://esm.sh/three@0.181.2/",
             "three/addons/": "https://esm.sh/three@0.181.2/examples/jsm/",
             "three-spritetext": "https://esm.sh/three-spritetext@1.10.0?external=three",
-            "3d-force-graph": "https://esm.sh/3d-force-graph@1.79.0?external=three"
+            "3d-force-graph": "https://esm.sh/3d-force-graph@1.79.0?external=three",
+            "./public/js/app.js": "./public/js/app.js?v=<?= $v ?>",
+            "./public/js/api.js": "./public/js/api.js?v=<?= $v ?>",
+            "./public/js/graph.js": "./public/js/graph.js?v=<?= $v ?>",
+            "./public/js/ui.js": "./public/js/ui.js?v=<?= $v ?>"
         }
     }
     </script>
