@@ -326,9 +326,9 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
     ];
 
     graphRef = ForceGraph3D({
-        rendererConfig: { logarithmicDepthBuffer: true }
+        rendererConfig: { logarithmicDepthBuffer: true, alpha: false }
     })(element)
-        .backgroundColor('#050505')
+        .backgroundColor('#000000')
         .showNavInfo(false)
         .nodeLabel('name')
         .nodeThreeObject(nodeRenderer)
@@ -455,13 +455,13 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
     const renderer = graphRef.renderer && graphRef.renderer();
     if (renderer) {
         renderer.useLegacyLights = false;
-        renderer.toneMapping = THREE.ReinhardToneMapping;
-        renderer.toneMappingExposure = 1.5;
+        renderer.toneMapping = THREE.LinearToneMapping;
+        renderer.toneMappingExposure = 1.0;
     }
 
     const composer = graphRef.postProcessingComposer && graphRef.postProcessingComposer();
     if (composer) {
-        const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.2, 0.4, 0.85);
+        const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.2, 0.1);
         composer.addPass(bloom);
     }
 
