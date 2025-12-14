@@ -427,38 +427,71 @@ function resetGhosting() {
     });
 }
 
-function applyFocusGhosting(centerNodeId) {
-    if (!Graph) return;
-
-    const { nodes = [], links = [] } = Graph.graphData();
-
-    const getNeighbors = (nodeId) => {
-        const neighbors = new Set();
-        links.forEach(link => {
-            const sId = typeof link.source === 'object' ? link.source.id : link.source;
-            const tId = typeof link.target === 'object' ? link.target.id : link.target;
-            if (sId === nodeId) neighbors.add(tId);
-            if (tId === nodeId) neighbors.add(sId);
-        });
-        return neighbors;
-    };
-
-    const visibleNodeIds = new Set([centerNodeId]);
-    const neighborLinks = new Set();
-
-    const degree1 = getNeighbors(centerNodeId);
-    degree1.forEach(id => {
-        visibleNodeIds.add(id);
-        const degree2 = getNeighbors(id);
-        degree2.forEach(id2 => visibleNodeIds.add(id2));
-    });
+function buildAdjacency(links) {
+    const adjacency = new Map();
 
     links.forEach(link => {
         const sId = typeof link.source === 'object' ? link.source.id : link.source;
         const tId = typeof link.target === 'object' ? link.target.id : link.target;
 
-        const isVisible = visibleNodeIds.has(sId) && visibleNodeIds.has(tId);
-        if (isVisible) neighborLinks.add(link);
+        if (!adjacency.has(sId)) adjacency.set(sId, new Set());
+        if (!adjacency.has(tId)) adjacency.set(tId, new Set());
+
+        adjacency.get(sId).add(tId);
+        adjacency.get(tId).add(sId);
+    });
+
+    return adjacency;
+}
+
+function computeTwoDegreeDepths(adjacency, centerNodeId) {
+    const depthMap = new Map();
+    const queue = [];
+
+    depthMap.set(centerNodeId, 0);
+    queue.push(centerNodeId);
+
+    while (queue.length) {
+        const current = queue.shift();
+        const currentDepth = depthMap.get(current);
+        if (currentDepth >= 2) continue;
+
+        const neighbors = adjacency.get(current) || [];
+        neighbors.forEach(neighbor => {
+            if (!depthMap.has(neighbor)) {
+                depthMap.set(neighbor, currentDepth + 1);
+                queue.push(neighbor);
+            }
+        });
+    }
+
+    return depthMap;
+}
+
+function applyFocusGhosting(centerNodeId) {
+    if (!Graph) return;
+
+    const { nodes = [], links = [] } = Graph.graphData();
+
+    const adjacency = buildAdjacency(links);
+    const depthMap = computeTwoDegreeDepths(adjacency, centerNodeId);
+
+    const visibleNodeIds = new Set(depthMap.keys());
+    const visibleLinks = new Set();
+
+    links.forEach(link => {
+        const sId = typeof link.source === 'object' ? link.source.id : link.source;
+        const tId = typeof link.target === 'object' ? link.target.id : link.target;
+
+        const sDepth = depthMap.get(sId);
+        const tDepth = depthMap.get(tId);
+
+        const withinTwoDegrees = sDepth !== undefined && tDepth !== undefined;
+        const edgeAllowed = withinTwoDegrees && !(sDepth === 2 && tDepth === 2);
+
+        if (edgeAllowed) {
+            visibleLinks.add(link);
+        }
     });
 
     nodes.forEach(node => {
@@ -470,7 +503,7 @@ function applyFocusGhosting(centerNodeId) {
     });
 
     links.forEach(link => {
-        const isVisible = neighborLinks.has(link);
+        const isVisible = visibleLinks.has(link);
         if (link.__group) {
             link.__group.visible = isVisible;
             fadeObjectOpacity(link.__group, isVisible ? 1 : 0);
