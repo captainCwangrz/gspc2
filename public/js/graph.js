@@ -869,9 +869,21 @@ function nodeRenderer(node) {
             }
             ctx.restore();
 
-            // Draw Nameplate (More space available now!)
+            // Draw Nameplate (More space available now!) with dynamic sizing
             const name = (node.name || '').trim();
-            ctx.font = 'bold 42px "Noto Sans SC", sans-serif'; // Clean, readable size
+            const baseFontSize = 42;
+            const maxTextWidth = size * 0.90; // Allow text to occupy up to 90% of available width
+
+            ctx.font = `bold ${baseFontSize}px "Noto Sans SC", sans-serif`;
+            let textMetrics = ctx.measureText(name);
+
+            // Shrink the font if the text exceeds the available width
+            if (textMetrics.width > maxTextWidth) {
+                const ratio = maxTextWidth / textMetrics.width;
+                const newFontSize = Math.floor(baseFontSize * ratio);
+                ctx.font = `bold ${newFontSize}px "Noto Sans SC", sans-serif`;
+            }
+
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillStyle = 'white';
