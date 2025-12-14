@@ -15,6 +15,7 @@ if(isset($_SESSION["user_id"])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Social-Demo Login</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="stylesheet" href="public/css/style.css?v=<?= $v ?>">
 </head>
 <body class="login-body">
