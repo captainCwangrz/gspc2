@@ -29,6 +29,7 @@ if (!$currentUser) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?= $csrfToken ?>">
     <title>Gossip Chain 3D</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="stylesheet" href="public/css/style.css?v=<?= $v ?>">
 
     <script type="importmap">
