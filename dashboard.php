@@ -98,7 +98,7 @@ if (!$currentUser) {
     </div>
 
     <div id="search-hud" class="hud-panel command-bar">
-        <div class="command-bar-inner">
+        <div class="command-bar-inner search-bar-wrapper">
             <span class="command-icon">🔍</span>
             <div class="command-input-wrap">
                 <input type="text" id="search-input" class="search-box" placeholder="Search for a user...">
@@ -109,7 +109,7 @@ if (!$currentUser) {
     </div>
 
     <div id="profile-hud" class="hud-panel identity-card">
-        <div class="identity-header">
+        <div class="identity-header profile-header">
             <div class="identity-main">
                 <img src="assets/<?= htmlspecialchars($currentUser["avatar"] ?? '0.png') ?>" class="avatar-circle" id="my-avatar">
                 <div class="identity-meta">
