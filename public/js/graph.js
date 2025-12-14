@@ -651,7 +651,7 @@ function createSpaceDust(color) {
 function nodeRenderer(node) {
     const cacheKey = `${node.avatar}|${node.id === stateRef.userId ? 'self' : 'other'}|${node.name || ''}`;
     if (!textureCache.has(cacheKey)) {
-        const size = 512;
+        const size = 256;
         const canvas = document.createElement('canvas');
         canvas.width = size;
         canvas.height = size;

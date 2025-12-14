@@ -63,9 +63,9 @@ if (!$currentUser) {
     <script>
         // Inject configuration from backend
         window.APP_CONFIG = {
-            RELATION_TYPES: <?php echo json_encode(RELATION_TYPES); ?>,
-            RELATION_STYLES: <?php echo json_encode(RELATION_STYLES); ?>,
-            DIRECTED_RELATION_TYPES: <?php echo json_encode(DIRECTED_RELATION_TYPES); ?>
+            RELATION_TYPES: <?php echo json_encode(RELATION_TYPES, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>,
+            RELATION_STYLES: <?php echo json_encode(RELATION_STYLES, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>,
+            DIRECTED_RELATION_TYPES: <?php echo json_encode(DIRECTED_RELATION_TYPES, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>
         };
     </script>
 </head>
