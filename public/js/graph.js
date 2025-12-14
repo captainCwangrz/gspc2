@@ -32,7 +32,7 @@ let hoveredNode = null;
 let hoveredLink = null;
 
 // Helper: Cone Material Cache (Opacity Aware)
-function getSharedConeMaterial(color, opacity = 1) {
+function getSharedConeMaterial(color, opacity = 0.6) {
     const opKey = Number(opacity).toFixed(1);
     const key = `${color}_${opKey}`;
 
@@ -43,7 +43,10 @@ function getSharedConeMaterial(color, opacity = 1) {
             opacity: parseFloat(opKey)
         }));
     }
-    return sharedMaterials.get(key);
+    const mat = sharedMaterials.get(key);
+    mat.transparent = true;
+    mat.opacity = parseFloat(opKey);
+    return mat;
 }
 
 // Helper: Generate a Generic Glow Texture (Reusable)
@@ -967,7 +970,7 @@ function linkRenderer(link) {
     const color = style ? style.color : '#fff';
     
     // USE CACHE: Start dimmed
-    const mat = getSharedConeMaterial(color, 0.4);
+    const mat = getSharedConeMaterial(color, 0.6);
     const cone = new THREE.Mesh(getSharedConeGeometry(), mat);
     cone.name = 'direction-cone';
     cone.visible = false;
