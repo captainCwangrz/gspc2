@@ -1,8 +1,10 @@
 <?php
 // dashboard.php
-$v = "1.1.0_" . time(); // Ensures fresh load every request
+require_once 'config/version.php';
 require_once 'config/db.php';
 require_once 'config/csrf.php';
+
+$version = app_version();
 
 if(!isset($_SESSION["user_id"])) {
     header("Location: index.php");
@@ -30,21 +32,31 @@ if (!$currentUser) {
     <meta name="csrf-token" content="<?= $csrfToken ?>">
     <title>Gossip Chain 3D</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
-    <link rel="stylesheet" href="public/css/style.css?v=<?= $v ?>">
+    <link rel="stylesheet" href="public/css/style.css?v=<?= $version ?>">
 
     <script type="importmap">
     {
         "imports": {
-            "three": "https://esm.sh/three@0.181.2",
-            "three/": "https://esm.sh/three@0.181.2/",
-            "three/addons/": "https://esm.sh/three@0.181.2/examples/jsm/",
-            "three-spritetext": "https://esm.sh/three-spritetext@1.10.0?external=three",
-            "3d-force-graph": "https://esm.sh/3d-force-graph@1.79.0?external=three",
-            "d3-force-3d": "https://esm.sh/d3-force-3d@3",
-            "./public/js/app.js": "./public/js/app.js?v=<?= $v ?>",
-            "./public/js/api.js": "./public/js/api.js?v=<?= $v ?>",
-            "./public/js/graph.js": "./public/js/graph.js?v=<?= $v ?>",
-            "./public/js/ui.js": "./public/js/ui.js?v=<?= $v ?>"
+            "three": "https://esm.sh/three@0.181.2?v=<?= $version ?>",
+            "three?v=<?= $version ?>": "https://esm.sh/three@0.181.2?v=<?= $version ?>",
+            "three/": "https://esm.sh/three@0.181.2/?v=<?= $version ?>",
+            "three/?v=<?= $version ?>": "https://esm.sh/three@0.181.2/?v=<?= $version ?>",
+            "three/addons/": "https://esm.sh/three@0.181.2/examples/jsm/?v=<?= $version ?>",
+            "three/addons/?v=<?= $version ?>": "https://esm.sh/three@0.181.2/examples/jsm/?v=<?= $version ?>",
+            "three-spritetext": "https://esm.sh/three-spritetext@1.10.0?external=three&v=<?= $version ?>",
+            "three-spritetext?v=<?= $version ?>": "https://esm.sh/three-spritetext@1.10.0?external=three&v=<?= $version ?>",
+            "3d-force-graph": "https://esm.sh/3d-force-graph@1.79.0?external=three&v=<?= $version ?>",
+            "3d-force-graph?v=<?= $version ?>": "https://esm.sh/3d-force-graph@1.79.0?external=three&v=<?= $version ?>",
+            "d3-force-3d": "https://esm.sh/d3-force-3d@3?v=<?= $version ?>",
+            "d3-force-3d?v=<?= $version ?>": "https://esm.sh/d3-force-3d@3?v=<?= $version ?>",
+            "./public/js/app.js": "./public/js/app.js?v=<?= $version ?>",
+            "./public/js/app.js?v=<?= $version ?>": "./public/js/app.js?v=<?= $version ?>",
+            "./public/js/api.js": "./public/js/api.js?v=<?= $version ?>",
+            "./public/js/api.js?v=<?= $version ?>": "./public/js/api.js?v=<?= $version ?>",
+            "./public/js/graph.js": "./public/js/graph.js?v=<?= $version ?>",
+            "./public/js/graph.js?v=<?= $version ?>": "./public/js/graph.js?v=<?= $version ?>",
+            "./public/js/ui.js": "./public/js/ui.js?v=<?= $version ?>",
+            "./public/js/ui.js?v=<?= $version ?>": "./public/js/ui.js?v=<?= $version ?>"
         }
     }
     </script>
@@ -67,7 +79,8 @@ if (!$currentUser) {
         window.APP_CONFIG = {
             RELATION_TYPES: <?php echo json_encode(RELATION_TYPES, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>,
             RELATION_STYLES: <?php echo json_encode(RELATION_STYLES, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>,
-            DIRECTED_RELATION_TYPES: <?php echo json_encode(DIRECTED_RELATION_TYPES, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>
+            DIRECTED_RELATION_TYPES: <?php echo json_encode(DIRECTED_RELATION_TYPES, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP); ?>,
+            VERSION: "<?= $version ?>"
         };
     </script>
 </head>
@@ -82,40 +95,51 @@ if (!$currentUser) {
     </div>
 
     <div id="connection-panel" class="hud-panel">
-        <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <div class="panel-header">
             <span class="panel-title">Connections</span>
-            <button id="conn-toggle-btn" style="background:none; border:none; color:white; cursor:pointer;">◀</button>
+            <button id="conn-toggle-btn" class="panel-toggle">◀</button>
         </div>
         <div id="connection-list"></div>
     </div>
 
-    <div id="search-hud" class="hud-panel">
-        <input type="text" id="search-input" class="search-box" placeholder="Search for a user...">
-        <div id="search-results"></div>
-        <div id="node-count-display" style="text-align: right; margin-top: 5px; font-size: 0.8em; color: #94a3b8;">Loading...</div>
-    </div>
-
-    <div id="profile-hud" class="hud-panel">
-        <div class="user-header">
-            <img src="assets/<?= htmlspecialchars($currentUser["avatar"] ?? '0.png') ?>" class="avatar-circle" id="my-avatar">
-            <div>
-                <div class="username-label"><?= htmlspecialchars($currentUser["real_name"] ?? $currentUser["username"]) ?></div>
-                <div style="font-size: 0.8em; color: #94a3b8;">@<?= htmlspecialchars($currentUser["username"]) ?></div>
-                <div class="user-id-label" id="my-user-id" style="font-size: 0.8em; color: #94a3b8;">ID: <?= $_SESSION["user_id"] ?></div>
+    <div id="search-hud" class="hud-panel command-bar">
+        <div class="command-bar-inner">
+            <span class="command-icon">🔍</span>
+            <div class="command-input-wrap">
+                <input type="text" id="search-input" class="search-box" placeholder="Search for a user...">
+                <div id="node-count-display" class="badge">Loading...</div>
             </div>
         </div>
-        <div id="my-signature" class="signature-display" style="margin-bottom: 10px; font-style: italic; color: #cbd5e1; font-size: 0.9em;"></div>
-        <div class="signature-container">
-            <textarea id="signature-input" rows="3" placeholder="Update your signature..." maxlength="160"></textarea>
-            <div id="signature-counter" style="text-align: right; color: #94a3b8; font-size: 0.8em; margin-bottom: 5px;">0 / 160</div>
-            <button id="signature-update-btn">Update Signature</button>
+        <div id="search-results"></div>
+    </div>
+
+    <div id="profile-hud" class="hud-panel identity-card">
+        <div class="identity-header">
+            <div class="identity-main">
+                <img src="assets/<?= htmlspecialchars($currentUser["avatar"] ?? '0.png') ?>" class="avatar-circle" id="my-avatar">
+                <div class="identity-meta">
+                    <div class="username-label"><?= htmlspecialchars($currentUser["real_name"] ?? $currentUser["username"]) ?></div>
+                    <div class="user-handle">@<?= htmlspecialchars($currentUser["username"]) ?></div>
+                    <div class="user-id-label" id="my-user-id">ID: <?= $_SESSION["user_id"] ?></div>
+                </div>
+            </div>
+            <div class="identity-actions">
+                <button id="zoom-btn" class="pill-btn primary">Zoom to Me</button>
+                <form id="logout-form" method="POST" action="logout.php" class="hidden-form">
+                    <input type="hidden" name="csrf_token" value="<?= $csrfToken ?>">
+                </form>
+                <button class="pill-btn secondary" type="button" onclick="document.getElementById('logout-form').submit();">Log Out</button>
+            </div>
         </div>
-        <div class="logout-container">
-            <button id="zoom-btn" class="action-btn" style="background: #3b82f6;">Zoom to Me</button>
-            <form id="logout-form" method="POST" action="logout.php" style="display:none;">
-                <input type="hidden" name="csrf_token" value="<?= $csrfToken ?>">
-            </form>
-            <button class="logout-link btn-secondary" type="button" style="text-decoration: none; text-align: center;" onclick="document.getElementById('logout-form').submit();">Log Out</button>
+        <div class="identity-signature-row">
+            <div id="my-signature" class="signature-display"></div>
+            <div class="signature-container">
+                <textarea id="signature-input" rows="2" placeholder="Update your signature..." maxlength="160"></textarea>
+                <div class="signature-row">
+                    <div id="signature-counter">0 / 160</div>
+                    <button id="signature-update-btn" class="pill-btn primary">Update</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -138,7 +162,7 @@ if (!$currentUser) {
     <div id="chat-hud"></div>
 
     <script type="module">
-        import { initApp } from './public/js/app.js';
+        import { initApp } from './public/js/app.js?v=<?= $version ?>';
         // Wait for the custom event we added in the head, or fall back to standard load
         function start() {
             // Check if libraries are loaded

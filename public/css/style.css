@@ -3,6 +3,10 @@
 /* public/css/style.css */
 body { margin: 0; overflow: hidden; font-family: 'Noto Sans SC', 'Segoe UI', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif; background: #000; color: white; }
 
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+*::-webkit-scrollbar-track { background: rgba(0,0,0,0.08); }
+
 input, button, select, textarea { font-family: inherit; }
 
 /* Hide Edge's default password reveal and clear buttons */
@@ -14,11 +18,12 @@ input[type="password"]::-ms-clear {
 /* HUD Common */
 .hud-panel {
     position: absolute;
-    background: rgba(15, 23, 42, 0.85);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-    padding: 16px;
+    background: rgba(15, 23, 42, 0.82);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    padding: 12px;
     box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
     color: #e2e8f0;
     z-index: 10;
@@ -30,23 +35,46 @@ input[type="password"]::-ms-clear {
 #inspector-panel { top: 50%; right: 20px; transform: translateY(-50%); width: 300px; display: none; border-left: 4px solid #6366f1; }
 #search-hud { top: 20px; left: 50%; transform: translateX(-50%); width: 320px; }
 #connection-panel { top: 50%; left: 20px; transform: translateY(-50%); width: 250px; max-height: 60vh; display: flex; flex-direction: column; transition: width 0.3s ease, padding 0.3s ease; overflow: hidden; }
-#connection-panel.collapsed { width: 40px; padding: 16px 8px; }
+#connection-panel.collapsed { width: 40px; padding: 12px 6px; }
 #connection-panel.collapsed .panel-title, #connection-panel.collapsed #connection-list { display: none; }
+#connection-panel.collapsed .panel-header { justify-content: center; margin-bottom: 0; }
 
 
 /* Components */
 .user-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .avatar-circle { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid #6366f1; }
-.search-box { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid #334155; padding: 8px; border-radius: 6px; color: white; outline:none; }
+.command-bar { padding: 10px 12px; }
+.command-bar-inner { display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.04); border-radius: 24px; border: 1px solid rgba(255,255,255,0.08); }
+.command-icon { padding-left: 8px; opacity: 0.8; }
+.command-input-wrap { flex:1; position: relative; display:flex; align-items:center; gap:8px; }
+.badge { background: rgba(99,102,241,0.18); color: #c7d2fe; font-size: 0.8em; padding: 6px 10px; border-radius: 14px; margin-left: auto; }
+.command-input-wrap .badge { position: relative; right: 6px; }
+.identity-card { display: flex; flex-direction: column; gap: 12px; }
+.identity-header { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.identity-main { display: flex; align-items: center; gap: 12px; }
+.identity-meta { display: flex; flex-direction: column; gap: 2px; }
+.user-handle, .user-id-label { font-size: 0.85em; color: #94a3b8; }
+.identity-actions { display: flex; gap: 8px; align-items: center; }
+.pill-btn { border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06); color: #e2e8f0; padding: 8px 12px; border-radius: 999px; cursor: pointer; }
+.pill-btn.primary { background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; border: none; }
+.pill-btn.secondary { background: rgba(239,68,68,0.15); color: #fecdd3; border: 1px solid rgba(239,68,68,0.3); }
+.identity-signature-row { display: flex; flex-direction: column; gap: 10px; }
+.signature-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.hidden-form { display:none; }
+.panel-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+.panel-toggle { background:none; border:none; color:white; cursor:pointer; }
+.search-box { width: 100%; background: transparent; border: none; padding: 10px 12px; border-radius: 24px; color: white; outline:none; }
 .action-btn { width: 100%; padding: 10px; margin-top: 16px; background: linear-gradient(135deg, #6366f1, #4f46e5); border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; }
 #search-input { width: 100%; box-sizing: border-box; }
-#search-results { margin-top: 8px; background: #1e293b; border-radius: 6px; max-height: 200px; overflow-y: auto; display: none; }
+#search-results { margin-top: 8px; background: #1e293b; border-radius: 12px; max-height: 200px; overflow-y: auto; display: none; }
+.search-box::placeholder { color: #94a3b8; }
 .search-result-item { padding: 8px; cursor: pointer; border-bottom: 1px solid #475569; }
 .search-result-item:hover { background: #334155; }
 .search-result-item:last-child { border-bottom: none; }
 .signature-container { margin-top: 10px; }
 #signature-input { width: 100%; background: #1e293b; border: 1px solid #475569; color: white; padding: 6px; border-radius: 4px; box-sizing: border-box; font-family: inherit; resize: vertical; }
 #signature-update-btn { width: 100%; background: #6366f1; color: white; border: none; padding: 6px; border-radius: 4px; margin-top: 6px; cursor: pointer; }
+#my-signature { margin-bottom: 6px; font-style: italic; color: #cbd5e1; font-size: 0.9em; }
 .signature-display {
     white-space: pre-wrap;
     word-break: break-word;
@@ -102,6 +130,19 @@ input[type="password"]::-ms-clear {
     padding: 2px 6px;
     border-radius: 4px;
 }
+.status-block { color: #cbd5e1; margin-top: 8px; }
+.chip-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; margin-top: 12px; }
+.chip { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 8px 10px; display: flex; justify-content: space-between; align-items: center; font-size: 0.9em; }
+.inspector-avatar { width:80px; height:80px; border-radius:50%; margin:0 auto 10px; display:block; border:3px solid #6366f1; }
+.inspector-title { text-align:center; font-weight:bold; font-size:1.2em; }
+.inspector-subtitle { text-align:center; color:#94a3b8; font-size:0.9em; margin-bottom: 8px; }
+.inspector-content { background: rgba(0,0,0,0.3); padding:10px; border-radius:8px; margin-top:10px; color:#cbd5e1; font-style:italic; text-align: center; }
+.inspector-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; margin-top: 12px; }
+.icon-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); color: #e2e8f0; padding: 8px 10px; border-radius: 10px; display: flex; gap: 6px; align-items: center; justify-content: center; cursor: pointer; }
+.icon-btn span { font-size: 0.9em; }
+.icon-btn.danger { border-color: rgba(239,68,68,0.3); color: #fecdd3; }
+.action-form { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+.select-compact { flex:1; background: #0f172a; border: 1px solid #334155; color: #e2e8f0; padding: 8px; border-radius: 10px; }
 
 .unread-messages-container { margin-top: 10px; }
 .unread-messages-header { font-weight: bold; margin-bottom: 8px; color: #38bdf8; }
@@ -143,7 +184,7 @@ input[type="password"]::-ms-clear {
 
 /* Chat */
 #chat-hud { position: fixed; bottom: 20px; right: 20px; width: 320px; display: flex; flex-direction: column; gap: 10px; z-index: 15; pointer-events: none; }
-.chat-window { pointer-events: auto; height: 250px; background: rgba(15, 23, 42, 0.95); border-radius: 8px; display: flex; flex-direction: column; border: 1px solid #334155; }
+.chat-window { pointer-events: auto; height: 350px; background: rgba(15, 23, 42, 0.95); border-radius: 8px; display: flex; flex-direction: column; border: 1px solid #334155; }
 .chat-header { padding: 8px; background: rgba(255,255,255,0.05); display: flex; justify-content: space-between; border-bottom: 1px solid #334155; }
 .chat-msgs { flex: 1; overflow-y: auto; padding: 8px; font-size: 0.9em; }
 .chat-input-area { display: flex; padding: 8px; gap: 4px; border-top: 1px solid #334155; }
