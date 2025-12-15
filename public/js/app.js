@@ -570,12 +570,32 @@ function applyFocusGhosting(centerNodeId) {
 
 function handleNodeClick(node) {
     // [MOBILE-REFACTOR-START]
-    if (window.innerWidth <= 768 && window.MobileApp) {
-        MobileApp.openInspector(node);
-        if (Graph && typeof Graph.focusNodeMobile === 'function') {
-            Graph.focusNodeMobile(node);
+    // STRICT GUARD: If on mobile, ALWAYS stop here.
+    if (window.innerWidth <= 768) {
+        console.log("👆 Mobile Click Detected on:", node.label);
+        
+        if (typeof window.MobileApp !== 'undefined') {
+            window.MobileApp.openInspector(node);
+        } else {
+            console.error("❌ MobileApp is not defined! Check mobile.js loading.");
         }
-        return;
+
+        // Camera Offset: Focus node in the TOP HALF of screen
+        // (Move camera target slightly BELOW node y)
+        if (window.Graph) {
+            const dist = 60; // Closer on mobile
+            const distRatio = 1 + dist/Math.hypot(node.x, node.y, node.z);
+            
+            Graph.camera.position.set(
+                node.x * distRatio,
+                node.y * distRatio + 15, // Offset Y up
+                node.z * distRatio
+            );
+            // Look at a point slightly below the node, effectively shifting node UP
+            Graph.controls.target.set(node.x, node.y - 8, node.z); 
+        }
+
+        return; // <--- CRITICAL: STOP EXECUTION
     }
     // [MOBILE-REFACTOR-END]
     State.selectedNodeId = node.id;
