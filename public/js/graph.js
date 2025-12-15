@@ -993,7 +993,8 @@ function linkRenderer(link) {
     const sprite = new window.SpriteText(labelText);
     sprite.color = style ? style.color : 'lightgrey';
     sprite.textHeight = 6.5;
-    sprite.fontFace = '"Noto Sans SC", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif';
+    sprite.padding = 5;
+    sprite.fontFace = 'Fredoka, "Noto Sans SC", "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
     sprite.name = 'link-label';
     sprite.visible = link.hideLabel ? false : showLabels;
     sprite.renderOrder = 2;
