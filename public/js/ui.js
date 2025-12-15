@@ -179,12 +179,19 @@ export function updateConnectionPanel() {
     });
 
     const html = connections.length > 0
-        ? connections.map(node => `
+        ? connections.map(node => {
+            // Dynamic font size calculation
+            const len = (node.name || '').length;
+            let nameSize = '1em';
+            if (len > 20) nameSize = '0.75em';
+            else if (len > 12) nameSize = '0.85em';
+
+            return `
             <div class="conn-item">
                 <div class="conn-profile">
                     <img src="${node.avatar}" class="conn-avatar">
                     <div class="conn-info">
-                        <div class="conn-name">${escapeHtml(node.name)}</div>
+                        <div class="conn-name" style="font-size: ${nameSize}">${escapeHtml(node.name)}</div>
                     </div>
                 </div>
                 <div class="conn-actions">
@@ -192,7 +199,8 @@ export function updateConnectionPanel() {
                     <button class="conn-btn" title="Locate" onclick="window.zoomToUser(${node.id})">🔎</button>
                 </div>
             </div>
-        `).join('')
+        `;
+        }).join('')
         : '<div class="conn-empty">No connections yet.</div>';
 
     list.innerHTML = html;
