@@ -998,6 +998,7 @@ function linkRenderer(link) {
     sprite.name = 'link-label';
     sprite.visible = link.hideLabel ? false : showLabels;
     sprite.renderOrder = 2;
+    sprite.material.depthWrite = false;
     group.add(sprite);
 
     link.__label = sprite;
