@@ -51,65 +51,22 @@ function getPairActiveRels(int $a, int $b, PDO $pdo): array {
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-try {
-    // 发起请求
-    if ($action === "request") {
-        $to_id = (int)($_POST["to_id"] ?? 0);
-        $type = $_POST["type"] ?? "";
+function processRelationshipRequest(int $userId, int $toId, string $type, bool $isUpdate = false): array {
+    global $pdo;
 
-        if (!$to_id || $to_id === $user_id || !in_array($type, RELATION_TYPES, true)) {
-            respond(false, ['error' => 'Invalid parameters'], 400);
-            exit;
-        }
-
-        if (!userExists($to_id, $pdo)) {
-            respond(false, ['error' => 'Target user not found'], 404);
-            exit;
-        }
-
-        $pairRels = getPairActiveRels($user_id, $to_id, $pdo);
-        $hasUndirected = array_reduce($pairRels, fn($carry, $rel) => $carry || !isDirectedType($rel['type']), false);
-        $hasOutgoingSameType = array_reduce($pairRels, function($carry, $rel) use ($user_id, $type) {
-            return $carry || ($rel['from_id'] == $user_id && $rel['type'] === $type);
-        }, false);
-
-        if ($hasOutgoingSameType || (!isDirectedType($type) && $hasUndirected)) {
-            respond(false, ['error' => 'Relationship already exists'], 400);
-            exit;
-        }
-
-        $checkReq = $pdo->prepare('
-            SELECT id FROM requests 
-            WHERE ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)) 
-            AND status = "PENDING"
-        ');
-        $checkReq->execute([$user_id, $to_id, $to_id, $user_id]);
-
-        if($checkReq->fetch()) {
-            respond(false, ['error' => 'Request pending'], 400);
-            exit;
-        }
-
-        $stmt = $pdo->prepare('INSERT INTO requests (from_id, to_id, type) VALUES (?, ?, ?)');
-        $stmt->execute([$user_id, $to_id, $type]);
-        respond(true, ['message' => 'Request sent']);
+    if (!$toId || $toId === $userId || !in_array($type, RELATION_TYPES, true)) {
+        respond(false, ['error' => 'Invalid parameters'], 400);
+        exit;
     }
-    // Update relationship type (Now creates a request)
-    elseif ($action === "update") {
-        $to_id = (int)($_POST["to_id"] ?? 0);
-        $type = $_POST["type"] ?? "";
 
-        if (!$to_id || $to_id === $user_id || !in_array($type, RELATION_TYPES, true)) {
-            respond(false, ['error' => 'Invalid parameters'], 400);
-            exit;
-        }
+    if (!userExists($toId, $pdo)) {
+        respond(false, ['error' => 'Target user not found'], 404);
+        exit;
+    }
 
-        if (!userExists($to_id, $pdo)) {
-            respond(false, ['error' => 'Target user not found'], 404);
-            exit;
-        }
+    $pairRels = getPairActiveRels($userId, $toId, $pdo);
 
-        $pairRels = getPairActiveRels($user_id, $to_id, $pdo);
+    if ($isUpdate) {
         if (empty($pairRels)) {
             respond(false, ['error' => 'No active relationship to update'], 404);
             exit;
@@ -118,7 +75,7 @@ try {
         $hasOutgoingCrush = false;
         $hasUndirected = false;
         foreach ($pairRels as $rel) {
-            if ($rel['type'] === 'CRUSH' && (int)$rel['from_id'] === $user_id) {
+            if ($rel['type'] === 'CRUSH' && (int)$rel['from_id'] === $userId) {
                 $hasOutgoingCrush = true;
             }
             if (!isDirectedType($rel['type'])) {
@@ -138,18 +95,50 @@ try {
             respond(false, ['error' => 'No active relationship to update'], 404);
             exit;
         }
+    } else {
+        $hasUndirected = array_reduce($pairRels, fn($carry, $rel) => $carry || !isDirectedType($rel['type']), false);
+        $hasOutgoingSameType = array_reduce($pairRels, function($carry, $rel) use ($userId, $type) {
+            return $carry || ($rel['from_id'] == $userId && $rel['type'] === $type);
+        }, false);
 
-        $checkReq = $pdo->prepare('
-            SELECT id FROM requests 
-            WHERE ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)) 
-            AND status = "PENDING"
-        ');
-        $checkReq->execute([$user_id, $to_id, $to_id, $user_id]);
-        if ($checkReq->fetch()) {
-            respond(false, ['error' => 'Request pending'], 400);
+        if ($hasOutgoingSameType || (!isDirectedType($type) && $hasUndirected)) {
+            respond(false, ['error' => 'Relationship already exists'], 400);
             exit;
         }
+    }
 
+    $checkReq = $pdo->prepare('
+        SELECT id FROM requests
+        WHERE ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?))
+        AND status = "PENDING"
+    ');
+    $checkReq->execute([$userId, $toId, $toId, $userId]);
+
+    if($checkReq->fetch()) {
+        respond(false, ['error' => 'Request pending'], 400);
+        exit;
+    }
+
+    return $pairRels;
+}
+
+try {
+    // 发起请求
+    if ($action === "request") {
+        $to_id = (int)($_POST["to_id"] ?? 0);
+        $type = $_POST["type"] ?? "";
+
+        processRelationshipRequest($user_id, $to_id, $type, false);
+        $stmt = $pdo->prepare('INSERT INTO requests (from_id, to_id, type) VALUES (?, ?, ?)');
+        $stmt->execute([$user_id, $to_id, $type]);
+        respond(true, ['message' => 'Request sent']);
+    }
+    // Update relationship type (Now creates a request)
+    elseif ($action === "update") {
+        $to_id = (int)($_POST["to_id"] ?? 0);
+        $type = $_POST["type"] ?? "";
+
+        processRelationshipRequest($user_id, $to_id, $type, true);
         $stmt = $pdo->prepare('INSERT INTO requests (from_id, to_id, type) VALUES (?, ?, ?)');
         $stmt->execute([$user_id, $to_id, $type]);
         respond(true, ['message' => 'Update request sent']);
@@ -250,6 +239,14 @@ try {
         $placeholders = implode(',', array_fill(0, count($idsToDelete), '?'));
         $del = $pdo->prepare("UPDATE relationships SET deleted_at = NOW(6), updated_at = NOW(6) WHERE id IN ($placeholders)");
         $del->execute($idsToDelete);
+
+        $rejectReq = $pdo->prepare('
+            UPDATE requests
+            SET status = "REJECTED", updated_at = NOW(6)
+            WHERE ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?))
+            AND status = "ACCEPTED"
+        ');
+        $rejectReq->execute([$user_id, $to_id, $to_id, $user_id]);
 
         respond(true, ['message' => 'Relationship removed']);
     }

@@ -3,9 +3,29 @@
 /* public/css/style.css */
 body { margin: 0; overflow: hidden; font-family: 'Noto Sans SC', 'Segoe UI', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif; background: #000; color: white; }
 
-*::-webkit-scrollbar { width: 6px; height: 6px; }
-*::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
-*::-webkit-scrollbar-track { background: rgba(0,0,0,0.08); }
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+div::-webkit-scrollbar,
+textarea::-webkit-scrollbar,
+ul::-webkit-scrollbar,
+ol::-webkit-scrollbar,
+.scrollable-container::-webkit-scrollbar { width: 6px; height: 6px; }
+
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb,
+div::-webkit-scrollbar-thumb,
+textarea::-webkit-scrollbar-thumb,
+ul::-webkit-scrollbar-thumb,
+ol::-webkit-scrollbar-thumb,
+.scrollable-container::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track,
+div::-webkit-scrollbar-track,
+textarea::-webkit-scrollbar-track,
+ul::-webkit-scrollbar-track,
+ol::-webkit-scrollbar-track,
+.scrollable-container::-webkit-scrollbar-track { background: rgba(0,0,0,0.08); }
 
 input, button, select, textarea { font-family: inherit; }
 

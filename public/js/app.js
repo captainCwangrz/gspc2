@@ -124,7 +124,21 @@ function applyGraphPayload(data) {
         if (sourceNode) sourceNode.degree = (sourceNode.degree || 0) + 1;
         if (targetNode) targetNode.degree = (targetNode.degree || 0) + 1;
     });
-    applyLastMessages(data.last_messages || {});
+
+    // Sync last message ids using links
+    const linksToProcess = data.links || State.graphData.links || [];
+    linksToProcess.forEach(link => {
+        const sId = typeof link.source === 'object' ? link.source.id : link.source;
+        const tId = typeof link.target === 'object' ? link.target.id : link.target;
+        const lastMsgId = parseInt(link.last_msg_id || 0);
+        if (!lastMsgId) return;
+
+        const sourceNode = State.nodeById.get(sId);
+        const targetNode = State.nodeById.get(tId);
+
+        if (sourceNode) updateNodeLastMessage(sourceNode, lastMsgId);
+        if (targetNode) updateNodeLastMessage(targetNode, lastMsgId);
+    });
 
     updateRequestsUI(data.requests || []);
     updateNotificationHUD(State.graphData.nodes);
@@ -209,6 +223,11 @@ function mergeGraphData(nodes, links, incremental = false) {
         const previous = nodeMap.get(n.id) || {};
         const { last_msg_id, ...nodeProps } = n;
         const merged = { ...previous, ...nodeProps };
+        if (typeof last_msg_id !== 'undefined') {
+            merged.last_msg_id = last_msg_id;
+        } else if (typeof merged.last_msg_id === 'undefined') {
+            merged.last_msg_id = 0;
+        }
         const oldPos = existingPositions.get(n.id);
         if (oldPos) Object.assign(merged, oldPos);
         nodeMap.set(n.id, merged);
@@ -344,46 +363,40 @@ function mergeGraphData(nodes, links, incremental = false) {
     return hasTopologyChanges;
 }
 
-function applyLastMessages(lastMessages) {
-    Object.keys(lastMessages).forEach(keyName => {
-        const nodeId = parseInt(keyName);
-        const node = State.nodeById.get(nodeId);
-        if (!node) return;
+function updateNodeLastMessage(node, serverLastMsgId) {
+    const normalized = parseInt(serverLastMsgId);
+    if (normalized <= (node.last_msg_id || 0)) return;
 
-        const serverLastMsgId = parseInt(lastMessages[keyName]);
-        if (serverLastMsgId <= (node.last_msg_id || 0)) return;
+    node.last_msg_id = normalized;
 
-        node.last_msg_id = serverLastMsgId;
+    const readKey = `read_msg_id_${State.userId}_${node.id}`;
+    const localReadId = parseInt(localStorage.getItem(readKey) || '0');
 
-        const readKey = `read_msg_id_${State.userId}_${node.id}`;
-        const localReadId = parseInt(localStorage.getItem(readKey) || '0');
-
-        if (serverLastMsgId > localReadId) {
-            if (State.activeChats.has(node.id)) {
-                if (window.loadMsgs) {
-                    window.loadMsgs(node.id);
-                }
-            } else {
-                const toastKey = `last_toasted_msg_${State.userId}_${node.id}`;
-                const lastToastedId = parseInt(sessionStorage.getItem(toastKey) || '0');
-
-                if (serverLastMsgId > lastToastedId) {
-                    if (window.showToast) {
-                        window.showToast(
-                            `New message from ${node.name}`,
-                            'info',
-                            3000,
-                            () => window.openChat(node.id, node.name),
-                            { userId: node.id }
-                        );
-                    }
-                    sessionStorage.setItem(toastKey, serverLastMsgId);
-                }
-
-                node.hasActiveNotification = true;
+    if (normalized > localReadId) {
+        if (State.activeChats.has(node.id)) {
+            if (window.loadMsgs) {
+                window.loadMsgs(node.id);
             }
+        } else {
+            const toastKey = `last_toasted_msg_${State.userId}_${node.id}`;
+            const lastToastedId = parseInt(sessionStorage.getItem(toastKey) || '0');
+
+            if (normalized > lastToastedId) {
+                if (window.showToast) {
+                    window.showToast(
+                        `New message from ${node.name}`,
+                        'info',
+                        3000,
+                        () => window.openChat(node.id, node.name),
+                        { userId: node.id }
+                    );
+                }
+                sessionStorage.setItem(toastKey, normalized);
+            }
+
+            node.hasActiveNotification = true;
         }
-    });
+    }
 }
 
 function tweenMaterialOpacity(material, targetOpacity) {

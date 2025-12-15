@@ -620,14 +620,6 @@ export function animateGraph() {
     const scaleMod = 1.0 + Math.sin(time) * 0.05;
 
     const links = (stateRef.graphData && stateRef.graphData.links) ? stateRef.graphData.links : [];
-    links.forEach(link => {
-        if(link.__dust) {
-            link.__dust.rotation.z += 0.3 * deltaSeconds;
-            if (link.__dustMat && link.__dustMat.uniforms && link.__dustMat.uniforms.uTime) {
-                link.__dustMat.uniforms.uTime.value = elapsedSeconds;
-            }
-        }
-    });
 
     const scene = graphRef.scene();
     const bg = scene.getObjectByName('starfield-bg');
@@ -674,12 +666,17 @@ export function animateGraph() {
     }
 
     // We run this logic even if focusActive is true, to handle the "non-focused" items
-    const graphLinks = (stateRef.graphData && stateRef.graphData.links) ? stateRef.graphData.links : [];
-
-    graphLinks.forEach(link => {
+    links.forEach(link => {
         let targetOpacity = 0.4;
         const sId = typeof link.source === 'object' ? link.source.id : link.source;
         const tId = typeof link.target === 'object' ? link.target.id : link.target;
+
+        if (link.__dust) {
+            link.__dust.rotation.z += 0.3 * deltaSeconds;
+            if (link.__dustMat && link.__dustMat.uniforms && link.__dustMat.uniforms.uTime) {
+                link.__dustMat.uniforms.uTime.value = elapsedSeconds;
+            }
+        }
 
         if (focusActive) {
             targetOpacity = 1.0;
@@ -696,7 +693,7 @@ export function animateGraph() {
         // Cones (Efficient)
         if (link.__group) {
             link.__group.children.forEach(child => {
-                if (child.name === 'link-label') return; 
+                if (child.name === 'link-label') return;
 
                 if (child.name === 'direction-cone' || child.name === 'reverse-direction-cone') {
                      // Check delta to avoid map lookups
@@ -844,8 +841,7 @@ function nodeRenderer(node) {
     const group = new THREE.Group();
 
     // 1. AVATAR SPRITE (Texture: 256x256)
-    const versionKey = (window.APP_CONFIG && window.APP_CONFIG.VERSION) ? window.APP_CONFIG.VERSION : '0';
-    const cacheKey = `${node.avatar}|${node.id === stateRef.userId ? 'self' : 'other'}|${node.name || ''}|${versionKey}|v8`;
+    const cacheKey = `${node.avatar}|${node.id === stateRef.userId ? 'self' : 'other'}|${node.name || ''}`;
 
     if (!textureCache.has(cacheKey)) {
         const size = 256;
