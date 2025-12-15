@@ -18,6 +18,19 @@ export function initUI({ state, config, relationTypes: relTypes, refreshData }) 
     mobileOverlay = document.getElementById('mobile-connection-overlay');
     mobileOverlayList = document.getElementById('mobile-connection-list');
 
+    const inspectorPanel = document.getElementById('inspector-panel');
+    if (inspectorPanel) {
+        ['touchstart', 'touchmove'].forEach(eventType => {
+            inspectorPanel.addEventListener(eventType, (e) => e.stopPropagation(), { passive: false });
+        });
+    }
+
+    if (mobileOverlay) {
+        ['touchstart', 'touchmove'].forEach(eventType => {
+            mobileOverlay.addEventListener(eventType, (e) => e.stopPropagation(), { passive: false });
+        });
+    }
+
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
         searchInput.addEventListener('input', handleSearch);

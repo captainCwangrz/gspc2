@@ -220,11 +220,25 @@ input[type="password"]::-ms-clear {
         border-radius: 0 0 12px 12px;
         padding: 8px;
         flex-direction: row;
-        justify-content: space-between;
+        justify-content: flex-start;
+        gap: 12px;
     }
     .identity-signature-row { display: none; }
-    .identity-main { gap: 8px; }
+    .identity-main {
+        gap: 8px;
+        flex: 1;
+        justify-content: flex-start;
+    }
     .avatar-circle { width: 32px; height: 32px; }
+    .identity-meta {
+        align-items: flex-start;
+        width: auto;
+        text-align: left;
+    }
+    .identity-actions {
+        margin-left: auto;
+        gap: 8px;
+    }
 
     /* 2. Inspector - Bottom Sheet */
     #inspector-panel {
@@ -236,18 +250,23 @@ input[type="password"]::-ms-clear {
         background: rgba(15, 23, 42, 0.9);
         backdrop-filter: blur(18px);
         -webkit-backdrop-filter: blur(18px);
-        max-height: 40vh;
+        max-height: 70vh;
         overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
         box-shadow: 0 -12px 32px rgba(0,0,0,0.6);
         opacity: 0;
-        pointer-events: none;
         transition: transform 0.3s ease, opacity 0.3s ease;
+        padding-bottom: env(safe-area-inset-bottom, 20px);
+        touch-action: pan-y;
     }
     #inspector-panel.mobile-active {
         display: block;
         transform: translateY(0);
         opacity: 1;
         pointer-events: auto;
+    }
+    .inspector-actions {
+        grid-template-columns: 1fr 1fr;
     }
 
     /* 3. Connection Panel - Full Screen Drawer */
@@ -309,7 +328,30 @@ input[type="password"]::-ms-clear {
 
     /* 5. Mobile Controls */
     #mobile-menu-btn { display: flex !important; }
-    #zoom-btn { display: none; }
+    #zoom-btn {
+        display: flex !important;
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+    }
+
+    .connection-overlay-item {
+        justify-content: flex-start;
+    }
+    .overlay-name {
+        flex: 1;
+        text-align: left;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .overlay-action {
+        margin-left: 0;
+        flex-shrink: 0;
+    }
 
     /* Hide WASD Help Text */
     body > div[style*="bottom: 20px"] { display: none !important; }
