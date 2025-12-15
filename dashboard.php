@@ -150,25 +150,11 @@ if (!$currentUser) {
         </div>
     </div>
 
-    <div id="inspector-panel" class="hud-panel desktop-only">
+    <div id="inspector-panel" class="hud-panel">
         <div id="inspector-data"></div>
     </div>
 
     <div id="chat-hud"></div>
-
-    <div id="mobile-connection-overlay" class="mobile-only">
-        <div class="connection-overlay-panel" role="dialog" aria-modal="true">
-            <div class="connection-overlay-header">
-                <div class="connection-overlay-title">Connections</div>
-                <div class="overlay-action">
-                    <button id="connection-overlay-close" class="overlay-close-btn">Close</button>
-                </div>
-            </div>
-            <div id="mobile-connection-list" class="connection-overlay-list"></div>
-        </div>
-    </div>
-
-    <button id="mobile-menu-btn" class="mobile-only" aria-label="Toggle connections">👥</button>
 
     <script type="module">
         import { initApp } from './public/js/app.js?v=<?= $version ?>';
