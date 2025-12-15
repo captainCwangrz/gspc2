@@ -53,6 +53,10 @@ export function initApp(userId) {
         onBackgroundClick: resetFocus
     });
 
+    // [MOBILE-REFACTOR-START]
+    window.Graph = Graph;
+    // [MOBILE-REFACTOR-END]
+
     window.handleNodeClick = handleNodeClick;
     window.lookAtNode = lookAtNode;
     window.resetFocus = resetFocus;
@@ -565,6 +569,15 @@ function applyFocusGhosting(centerNodeId) {
 }
 
 function handleNodeClick(node) {
+    // [MOBILE-REFACTOR-START]
+    if (window.innerWidth <= 768 && window.MobileApp) {
+        MobileApp.openInspector(node);
+        if (Graph && typeof Graph.focusNodeMobile === 'function') {
+            Graph.focusNodeMobile(node);
+        }
+        return;
+    }
+    // [MOBILE-REFACTOR-END]
     State.selectedNodeId = node.id;
     const dist = 150;
     const v = new THREE.Vector3(node.x, node.y, node.z || 0);

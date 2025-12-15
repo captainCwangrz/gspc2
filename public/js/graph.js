@@ -529,6 +529,10 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
 
     initInputHandlers(element);
 
+    // [MOBILE-REFACTOR-START]
+    graphRef.focusNodeMobile = focusNodeMobile;
+    // [MOBILE-REFACTOR-END]
+
     return graphRef;
 }
 
@@ -551,6 +555,28 @@ export function transitionCamera(pos, lookAt, duration = 1500) {
 
     transitionState.active = true;
 }
+
+// [MOBILE-REFACTOR-START]
+export function focusNodeMobile(node) {
+    if (!node) return;
+
+    const dist = 150;
+    const target = new THREE.Vector3(node.x, node.y, node.z || 0);
+    if (target.lengthSq() === 0) target.set(0, 0, 1);
+
+    const camPos = target.clone().normalize().multiplyScalar(dist).add(target);
+    camPos.y += 20;
+
+    const verticalOffset = dist * 0.2;
+    const lookTarget = {
+        x: target.x,
+        y: target.y - verticalOffset,
+        z: target.z
+    };
+
+    transitionCamera({ x: camPos.x, y: camPos.y, z: camPos.z }, lookTarget, 1200);
+}
+// [MOBILE-REFACTOR-END]
 
 function easeCubicInOut(t) {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
