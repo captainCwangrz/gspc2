@@ -4,12 +4,19 @@ let State;
 let refreshDataFn;
 let relationTypes = [];
 let Config;
+let isMobileView = false;
+let mobileOverlay;
+let mobileOverlayList;
 
 export function initUI({ state, config, relationTypes: relTypes, refreshData }) {
     State = state;
     relationTypes = relTypes || [];
     refreshDataFn = refreshData;
     Config = config;
+
+    isMobileView = window.innerWidth <= 768;
+    mobileOverlay = document.getElementById('mobile-connection-overlay');
+    mobileOverlayList = document.getElementById('mobile-connection-list');
 
     const searchInput = document.getElementById('search-input');
     if (searchInput) {
@@ -43,7 +50,7 @@ export function initUI({ state, config, relationTypes: relTypes, refreshData }) 
 
     const connToggleBtn = document.getElementById('conn-toggle-btn');
     const connPanel = document.getElementById('connection-panel');
-    if (connToggleBtn && connPanel) {
+    if (connToggleBtn && connPanel && !isMobileView) {
         const isCollapsed = localStorage.getItem('connPanelCollapsed') === 'true';
         if (isCollapsed) {
             connPanel.classList.add('collapsed');
@@ -58,9 +65,25 @@ export function initUI({ state, config, relationTypes: relTypes, refreshData }) 
     }
 
     const mobileMenuBtn = document.getElementById('mobile-menu-btn');
-    if (mobileMenuBtn && connPanel) {
-        mobileMenuBtn.addEventListener('click', () => {
-            connPanel.classList.toggle('mobile-open');
+    if (mobileMenuBtn) {
+        if (isMobileView) {
+            mobileMenuBtn.addEventListener('click', () => {
+                toggleMobileConnections();
+            });
+        } else if (connPanel) {
+            mobileMenuBtn.addEventListener('click', () => {
+                connPanel.classList.toggle('mobile-open');
+            });
+        }
+    }
+
+    const overlayCloseBtn = document.getElementById('connection-overlay-close');
+    if (overlayCloseBtn) {
+        overlayCloseBtn.addEventListener('click', () => toggleMobileConnections(false));
+    }
+    if (mobileOverlay) {
+        mobileOverlay.addEventListener('click', (e) => {
+            if (e.target === mobileOverlay) toggleMobileConnections(false);
         });
     }
 
@@ -83,6 +106,12 @@ export function getRelLabel(type) {
 export function escapeHtml(text) {
     if (!text) return text;
     return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
+function toggleMobileConnections(forceState) {
+    if (!mobileOverlay) return;
+    const shouldOpen = typeof forceState === 'boolean' ? forceState : !mobileOverlay.classList.contains('active');
+    mobileOverlay.classList.toggle('active', shouldOpen);
 }
 
 function updateHudVisibility() {
@@ -211,6 +240,31 @@ export function updateConnectionPanel() {
         : '<div class="conn-empty">No connections yet.</div>';
 
     list.innerHTML = html;
+
+    if (mobileOverlayList) {
+        const mobileHtml = connections.length > 0
+            ? connections.map(node => `
+                <div class="connection-overlay-item" data-user-id="${node.id}">
+                    <img src="${node.avatar}" class="overlay-avatar" alt="${escapeHtml(node.name)}">
+                    <div class="overlay-name">${escapeHtml(node.name)}</div>
+                    <div class="overlay-action">
+                        <button class="overlay-btn" data-overlay-action="message" data-user-id="${node.id}" data-user-name="${escapeHtml(node.name)}">Message</button>
+                    </div>
+                </div>
+            `).join('')
+            : '<div class="conn-empty" style="padding:12px;">No connections yet.</div>';
+
+        mobileOverlayList.innerHTML = mobileHtml;
+        const overlayButtons = mobileOverlayList.querySelectorAll('[data-overlay-action="message"]');
+        overlayButtons.forEach(btn => {
+            const userId = parseInt(btn.getAttribute('data-user-id'));
+            const name = btn.getAttribute('data-user-name');
+            btn.addEventListener('click', () => {
+                toggleMobileConnections(false);
+                window.openChat(userId, name);
+            });
+        });
+    }
 }
 
 function zoomToUser(userId) {
@@ -374,6 +428,7 @@ function openChat(userId, rawName) {
     const chatHud = document.getElementById('chat-hud');
     if (!chatHud) return;
     chatHud.style.pointerEvents = 'auto';
+    if (isMobileView) chatHud.classList.add('mobile-chat-open');
 
     State.activeChats.add(userId);
 
@@ -409,10 +464,14 @@ function openChat(userId, rawName) {
     div.id = `chat-${userId}`;
     div.className = 'chat-window';
     div.setAttribute('data-last-id', '0');
+    const backBtn = isMobileView ? `<button class="chat-back-btn mobile-only" aria-label="Back" onclick="window.closeChat(${userId})">←</button>` : '';
     div.innerHTML = `
         <div class="chat-header">
-            <span>${escapeHtml(userName)}</span>
-            <span style="cursor:pointer; color:#ef4444; font-size:1.2rem; padding:6px 10px;" onclick="window.closeChat(${userId})">✕</span>
+            ${backBtn}
+            <span class="chat-header-title">${escapeHtml(userName)}</span>
+            <div class="chat-header-actions">
+                <button class="chat-close-btn" aria-label="Close chat" onclick="window.closeChat(${userId})">✕</button>
+            </div>
         </div>
         <div class="chat-msgs" id="msgs-${userId}">Loading...</div>
         <form class="chat-input-area" onsubmit="window.sendMsg(event, ${userId})">
@@ -444,7 +503,9 @@ function closeChat(userId) {
     State.activeChats.delete(userId);
 
     if(document.getElementById('chat-hud').children.length === 0) {
-        document.getElementById('chat-hud').style.pointerEvents = 'none';
+        const hud = document.getElementById('chat-hud');
+        hud.style.pointerEvents = 'none';
+        hud.classList.remove('mobile-chat-open');
     }
 }
 
