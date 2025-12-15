@@ -308,6 +308,12 @@ function initInputHandlers(element) {
         cameraRef.position.addScaledVector(forward, distance);
     }, { passive: false });
 
+    window.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && typeof window.resetFocus === 'function') {
+            window.resetFocus();
+        }
+    });
+
     inputHandlersInitialized = true;
 }
 
@@ -676,6 +682,8 @@ export function animateGraph() {
         const tId = typeof link.target === 'object' ? link.target.id : link.target;
 
         if (focusActive) {
+            targetOpacity = 1.0;
+        } else if (stateRef && link === stateRef.highlightLink) {
             targetOpacity = 1.0;
         } else if (hoveredLink && link === hoveredLink) targetOpacity = 1.0;
         else if (hoveredNode && (hoveredNode.id === sId || hoveredNode.id === tId)) targetOpacity = 1.0;

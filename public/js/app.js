@@ -55,6 +55,7 @@ export function initApp(userId) {
 
     window.handleNodeClick = handleNodeClick;
     window.lookAtNode = lookAtNode;
+    window.resetFocus = resetFocus;
 
     initUI({ state: State, config: CONFIG, relationTypes: RELATION_TYPES, refreshData: loadGraphData });
 
@@ -600,8 +601,6 @@ function resetFocus() {
     State.highlightLink = null;
 
     resetGhosting();
-
-    transitionCamera({ x: 0, y: 0, z: 800 }, { x: 0, y: 0, z: 0 }, 1500);
 
     Graph.nodeColor(Graph.nodeColor());
     Graph.linkColor(Graph.linkColor());

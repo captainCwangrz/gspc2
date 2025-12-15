@@ -30,7 +30,7 @@ input[type="password"]::-ms-clear {
 }
 
 /* Specific Panels */
-#profile-hud { top: 20px; left: 20px; width: fit-content; min-width: 280px; max-width: 450px; }
+#profile-hud { top: 20px; left: 20px; width: fit-content; min-width: 200px; max-width: 450px; }
 #notif-hud { top: 20px; right: 20px; width: 280px; max-height: 300px; overflow-y: auto; display: none; }
 #inspector-panel { top: 50%; right: 20px; transform: translateY(-50%); width: 300px; display: none; border-left: 4px solid #6366f1; }
 #search-hud { top: 20px; left: 50%; transform: translateX(-50%); width: auto; background: none; border: none; box-shadow: none; padding: 0; backdrop-filter: none; -webkit-backdrop-filter: none; display: flex; justify-content: center; align-items: center; }
@@ -61,6 +61,7 @@ input[type="password"]::-ms-clear {
 .pill-btn { border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06); color: #e2e8f0; padding: 8px 12px; border-radius: 999px; cursor: pointer; }
 .pill-btn.primary { background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; border: none; }
 .pill-btn.secondary { background: rgba(239,68,68,0.15); color: #fecdd3; border: 1px solid rgba(239,68,68,0.3); }
+.icon-btn-compact { padding: 8px; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; }
 .identity-signature-row { display: flex; flex-direction: column; gap: 10px; }
 .signature-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .hidden-form { display:none; }

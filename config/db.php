@@ -18,6 +18,7 @@ class Database {
                 self::$pdo = new PDO($dsn, self::$user, self::$pass, [
                     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                    PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4",
                 ]);
 
             } catch (PDOException $e) {
@@ -44,6 +45,7 @@ class Database {
                 self::$pass,
                 [
                     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4",
                 ]
             );
             $pdo->exec("CREATE DATABASE IF NOT EXISTS `" . self::$db . "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
@@ -52,6 +54,7 @@ class Database {
             self::$pdo = new PDO($dsn, self::$user, self::$pass, [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES utf8mb4",
             ]);
 
             $sql = <<<SQL
@@ -67,7 +70,7 @@ class Database {
                     DEFAULT CURRENT_TIMESTAMP(6)
                     ON UPDATE CURRENT_TIMESTAMP(6),
                   INDEX idx_users_updated_at (updated_at)
-                ) ENGINE=InnoDB;
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
                 CREATE TABLE IF NOT EXISTS relationships (
                   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -89,7 +92,7 @@ class Database {
                   INDEX idx_rel_deleted_at (deleted_at),
                   INDEX idx_rel_from (from_id),
                   INDEX idx_rel_to (to_id)
-                ) ENGINE=InnoDB;
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
                 CREATE TABLE IF NOT EXISTS requests (
                   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -106,7 +109,7 @@ class Database {
                   FOREIGN KEY (to_id)   REFERENCES users(id) ON DELETE CASCADE,
 
                   INDEX idx_requests_to_status_updated (to_id, status, updated_at)
-                ) ENGINE=InnoDB;
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
                 CREATE TABLE IF NOT EXISTS messages (
                   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -120,7 +123,7 @@ class Database {
 
                   INDEX idx_timestamp (timestamp),
                   INDEX idx_chat_history (from_id, to_id, id)
-                ) ENGINE=InnoDB;
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
                 CREATE TABLE IF NOT EXISTS read_receipts (
                   user_id INT NOT NULL,
@@ -133,7 +136,7 @@ class Database {
                   PRIMARY KEY (user_id, peer_id),
                   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                   FOREIGN KEY (peer_id) REFERENCES users(id) ON DELETE CASCADE
-                ) ENGINE=InnoDB;
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
             SQL;
             self::$pdo->exec($sql);
 
