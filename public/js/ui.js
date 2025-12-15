@@ -57,6 +57,13 @@ export function initUI({ state, config, relationTypes: relTypes, refreshData }) 
         });
     }
 
+    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+    if (mobileMenuBtn && connPanel) {
+        mobileMenuBtn.addEventListener('click', () => {
+            connPanel.classList.toggle('mobile-open');
+        });
+    }
+
     window.sendRequest = sendRequest;
     window.updateRel = updateRel;
     window.acceptReq = acceptReq;
@@ -405,7 +412,7 @@ function openChat(userId, rawName) {
     div.innerHTML = `
         <div class="chat-header">
             <span>${escapeHtml(userName)}</span>
-            <span style="cursor:pointer; color:#ef4444;" onclick="window.closeChat(${userId})">✕</span>
+            <span style="cursor:pointer; color:#ef4444; font-size:1.2rem; padding:6px 10px;" onclick="window.closeChat(${userId})">✕</span>
         </div>
         <div class="chat-msgs" id="msgs-${userId}">Loading...</div>
         <form class="chat-input-area" onsubmit="window.sendMsg(event, ${userId})">

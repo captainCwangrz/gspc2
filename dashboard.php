@@ -156,6 +156,8 @@ if (!$currentUser) {
 
     <div id="chat-hud"></div>
 
+    <button id="mobile-menu-btn" aria-label="Toggle connections">👥</button>
+
     <script type="module">
         import { initApp } from './public/js/app.js?v=<?= $version ?>';
         // Wait for the custom event we added in the head, or fall back to standard load

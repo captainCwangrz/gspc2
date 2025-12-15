@@ -16,6 +16,8 @@ let sharedConeGeometry = new THREE.ConeGeometry(2, 6, 8);
 const sharedMaterials = new Map();
 const glowTextureCache = new Map(); // Cache for the generic glow texture
 
+const isMobile = () => window.innerWidth <= 768;
+
 const PI_HALF = Math.PI / 2;
 const MAX_PITCH = PI_HALF - 0.1; // ~85 degrees
 
@@ -229,6 +231,7 @@ function resetInputState() {
 
 function initInputHandlers(element) {
     if (!element || inputHandlersInitialized) return;
+    if (isMobile()) return;
 
     // Ensure camera uses FPS-style Euler ordering
     if (cameraRef) cameraRef.rotation.order = 'YXZ';
@@ -320,6 +323,7 @@ function initInputHandlers(element) {
 function processCameraMovement(dt) {
     if (!graphRef || !cameraRef || transitionState.active) return;
     if (isFormFieldActive()) return;
+    if (isMobile()) return;
 
     const forward = new THREE.Vector3();
     cameraRef.getWorldDirection(forward);
@@ -512,13 +516,25 @@ export function createGraph({ state, config, element, onNodeClick, onLinkClick, 
 
     const controls = graphRef.controls();
     if (controls) {
-        controls.enabled = false;
+        if (isMobile()) {
+            controls.enabled = true;
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.1;
+            controls.rotateSpeed = 0.8;
+            controls.zoomSpeed = 1.2;
+            controls.screenSpacePanning = false;
 
-        if (typeof controls.dispose === 'function') {
-            controls.dispose();
+            controls.addEventListener('start', () => { isDragging = true; });
+            controls.addEventListener('end', () => { isDragging = false; });
+        } else {
+            controls.enabled = false;
+
+            if (typeof controls.dispose === 'function') {
+                controls.dispose();
+            }
+
+            controls.update = () => {};
         }
-
-        controls.update = () => {};
     }
 
     cameraRef = graphRef.camera();
