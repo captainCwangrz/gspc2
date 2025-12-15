@@ -126,18 +126,36 @@ function applyGraphPayload(data) {
     });
 
     // Sync last message ids using links
+    // 优先使用增量数据 data.links，如果没有则使用全量 State.graphData.links
     const linksToProcess = data.links || State.graphData.links || [];
     linksToProcess.forEach(link => {
         const sId = typeof link.source === 'object' ? link.source.id : link.source;
         const tId = typeof link.target === 'object' ? link.target.id : link.target;
         const lastMsgId = parseInt(link.last_msg_id || 0);
+
+        // 如果没有有效消息ID，直接跳过
         if (!lastMsgId) return;
 
-        const sourceNode = State.nodeById.get(sId);
-        const targetNode = State.nodeById.get(tId);
+        // 【核心修复】逻辑修正：
+        // 1. 识别谁是“对方” (Peer)。
+        // 2. 只更新“对方”的节点状态。
+        // 3. 绝对不要更新 State.userId (我自己)，防止给自己弹通知。
+        
+        let peerId = null;
+        if (sId === State.userId) {
+            peerId = tId;
+        } else if (tId === State.userId) {
+            peerId = sId;
+        } else {
+            // 这条连线与我无关（比如是别人的对话），直接忽略
+            return;
+        }
 
-        if (sourceNode) updateNodeLastMessage(sourceNode, lastMsgId);
-        if (targetNode) updateNodeLastMessage(targetNode, lastMsgId);
+        const peerNode = State.nodeById.get(peerId);
+        // 只有 peerNode 存在且确实是对方时，才更新状态
+        if (peerNode) {
+            updateNodeLastMessage(peerNode, lastMsgId);
+        }
     });
 
     updateRequestsUI(data.requests || []);
@@ -223,9 +241,16 @@ function mergeGraphData(nodes, links, incremental = false) {
         const previous = nodeMap.get(n.id) || {};
         const { last_msg_id, ...nodeProps } = n;
         const merged = { ...previous, ...nodeProps };
-        if (typeof last_msg_id !== 'undefined') {
+
+        // 【核心修复】保护本地状态：
+        // 只有当后端发来有效的 ID (>0) 时才更新。
+        // 忽略后端的 0，因为那是 api/data.php 的默认占位符。
+        if (typeof last_msg_id !== 'undefined' && last_msg_id > 0) {
             merged.last_msg_id = last_msg_id;
-        } else if (typeof merged.last_msg_id === 'undefined') {
+        } 
+        
+        // 兜底：如果合并后完全没有这个字段（既没有旧值，新值也是0），才初始化为0
+        if (typeof merged.last_msg_id === 'undefined') {
             merged.last_msg_id = 0;
         }
         const oldPos = existingPositions.get(n.id);
