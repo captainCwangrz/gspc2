@@ -570,6 +570,20 @@ function handleNodeClick(node) {
     const v = new THREE.Vector3(node.x, node.y, node.z || 0);
     if (v.lengthSq() === 0) v.set(0, 0, 1);
 
+    if (window.innerWidth <= 768) {
+        const connectionPanel = document.getElementById('connection-panel');
+        if (connectionPanel) connectionPanel.classList.remove('mobile-open');
+
+        const searchInput = document.getElementById('search-input');
+        if (searchInput) searchInput.value = '';
+
+        const resultsContainer = document.getElementById('search-results');
+        if (resultsContainer) {
+            resultsContainer.innerHTML = '';
+            resultsContainer.style.display = 'none';
+        }
+    }
+
     const camPos = v.clone().normalize().multiplyScalar(dist).add(v);
     camPos.y += 40;
 

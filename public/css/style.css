@@ -201,6 +201,81 @@ input[type="password"]::-ms-clear {
     border-color: rgba(255, 255, 255, 0.4) !important;
 }
 
+/* Mobile Optimization */
+@media (max-width: 768px) {
+    /* Global Container Adjustments */
+    body { overscroll-behavior: none; }
+
+    /* 1. Profile Bar - Compact Top Strip */
+    #profile-hud {
+        top: 0; left: 0; right: 0;
+        width: 100%; max-width: none;
+        border-radius: 0 0 12px 12px;
+        padding: 8px;
+        flex-direction: row;
+        justify-content: space-between;
+    }
+    .identity-signature-row { display: none; }
+    .identity-main { gap: 8px; }
+    .avatar-circle { width: 32px; height: 32px; }
+
+    /* 2. Inspector - Bottom Sheet */
+    #inspector-panel {
+        top: auto; bottom: 0; right: 0; left: 0;
+        width: 100%; transform: none;
+        border-radius: 20px 20px 0 0;
+        border-left: none; border-top: 1px solid rgba(255,255,255,0.2);
+        animation: slideUp 0.3s ease-out;
+        max-height: 40vh; overflow-y: auto;
+    }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+    /* 3. Connection Panel - Full Screen Drawer */
+    #connection-panel {
+        top: 0; left: 0; bottom: 0;
+        width: 80%; max-width: 300px;
+        height: 100vh; max-height: none;
+        transform: translateX(-100%);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 90;
+        border-radius: 0;
+    }
+    #connection-panel.mobile-open { transform: translateX(0); }
+    #connection-panel.collapsed { width: 80%; }
+
+    /* 4. Chat - Full Screen Focus */
+    #chat-hud {
+        bottom: 0; right: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 200;
+    }
+    .chat-window {
+        height: 100%; width: 100%;
+        border-radius: 0;
+        background: #0f172a;
+    }
+
+    /* 5. Mobile Controls */
+    #mobile-menu-btn { display: flex !important; }
+    #zoom-btn { display: none; }
+
+    /* Hide WASD Help Text */
+    body > div[style*="bottom: 20px"] { display: none !important; }
+}
+
+/* Mobile FAB Button (Hidden on Desktop) */
+#mobile-menu-btn {
+    display: none;
+    position: fixed; bottom: 20px; left: 20px;
+    width: 50px; height: 50px;
+    border-radius: 50%;
+    background: #6366f1; color: white;
+    border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    z-index: 80;
+    justify-content: center; align-items: center;
+    font-size: 1.5rem;
+}
+
 /* Connection Panel */
 #connection-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
 #connection-list::-webkit-scrollbar { width: 6px; }
