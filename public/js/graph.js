@@ -834,6 +834,10 @@ function createSpaceDust(color) {
     const points = new THREE.Points(geo, mat);
     points.name = 'dust-points';
 
+    // FIX: Disable raycasting for dust to prevent "infinite link" hover bug
+    // caused by non-uniform scaling of the parent container.
+    points.raycast = () => {};
+
     return points;
 }
 
