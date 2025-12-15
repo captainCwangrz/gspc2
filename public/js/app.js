@@ -566,35 +566,18 @@ function applyFocusGhosting(centerNodeId) {
 
 function handleNodeClick(node) {
     State.selectedNodeId = node.id;
-    const isMobile = window.innerWidth <= 768;
     const dist = 150;
     const v = new THREE.Vector3(node.x, node.y, node.z || 0);
     if (v.lengthSq() === 0) v.set(0, 0, 1);
 
-    if (isMobile) {
-        const connectionPanel = document.getElementById('connection-panel');
-        if (connectionPanel) connectionPanel.classList.remove('mobile-open');
+    const camPos = v.clone().normalize().multiplyScalar(dist).add(v);
+    camPos.y += 40;
 
-        const searchInput = document.getElementById('search-input');
-        if (searchInput) searchInput.value = '';
-
-        const resultsContainer = document.getElementById('search-results');
-        if (resultsContainer) {
-            resultsContainer.innerHTML = '';
-            resultsContainer.style.display = 'none';
-        }
-    }
-
-    if (!isMobile) {
-        const camPos = v.clone().normalize().multiplyScalar(dist).add(v);
-        camPos.y += 40;
-
-        transitionCamera(
-            { x: camPos.x, y: camPos.y, z: camPos.z },
-            node,
-            1500
-        );
-    }
+    transitionCamera(
+        { x: camPos.x, y: camPos.y, z: camPos.z },
+        node,
+        1500
+    );
 
     State.highlightNodes.clear();
     State.highlightLinks.clear();
@@ -662,7 +645,6 @@ function resetFocus() {
 
     const inspector = document.getElementById('inspector-panel');
     if (inspector) {
-        inspector.classList.remove('mobile-active');
         inspector.style.display = 'none';
     }
 }
@@ -671,7 +653,6 @@ function showNodeInspector(node) {
     const panel = document.getElementById('inspector-panel');
     const dataDiv = document.getElementById('inspector-data');
     panel.style.display = 'block';
-    panel.classList.toggle('mobile-active', window.innerWidth <= 768);
 
     const links = Graph.graphData().links;
     const relationsCount = links.filter(l => {
@@ -852,7 +833,6 @@ function showLinkInspector(link) {
     const panel = document.getElementById('inspector-panel');
     const dataDiv = document.getElementById('inspector-data');
     panel.style.display = 'block';
-    panel.classList.toggle('mobile-active', window.innerWidth <= 768);
 
     const style = CONFIG.relStyles[link.type] || { color: '#fff', label: link.type };
 
