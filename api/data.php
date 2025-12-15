@@ -132,27 +132,8 @@ try {
     $stmt->execute([$current_user_id]);
     $requests = $stmt->fetchAll();
 
-    // 4. Build last message map using relationships table (decoupled from edge delta)
-    $lastMessages = [];
-    $msgStmt = $pdo->prepare('SELECT from_id, to_id, last_msg_id FROM relationships WHERE deleted_at IS NULL AND (from_id = ? OR to_id = ?)');
-    $msgStmt->execute([(int)$current_user_id, (int)$current_user_id]);
-    $msgRows = $msgStmt->fetchAll();
-    foreach ($msgRows as $row) {
-        $fromId = (int)$row['from_id'];
-        $toId = (int)$row['to_id'];
-        $lastId = isset($row['last_msg_id']) ? (int)$row['last_msg_id'] : 0;
-
-        if ($fromId === (int)$current_user_id) {
-            $key = (string)$toId;
-            $lastMessages[$key] = max($lastMessages[$key] ?? 0, $lastId);
-        } elseif ($toId === (int)$current_user_id) {
-            $key = (string)$fromId;
-            $lastMessages[$key] = max($lastMessages[$key] ?? 0, $lastId);
-        }
-    }
-
-    // 5. Format data for frontend
-    $formattedNodes = array_map(function($u) use ($lastMessages) {
+    // 4. Format data for frontend
+    $formattedNodes = array_map(function($u) {
         $uid = (int)$u['id'];
         return [
             'id' => $uid,
@@ -161,7 +142,7 @@ try {
             'avatar' => "assets/" . $u['avatar'],
             'signature' => $u['signature'] ?? 'No gossip yet.',
             'val' => 1,
-            'last_msg_id' => isset($lastMessages[$uid]) ? (int)$lastMessages[$uid] : 0
+            'last_msg_id' => 0
         ];
     }, $nodes);
 
@@ -170,6 +151,7 @@ try {
             'source' => (int)$e['from_id'],
             'target' => (int)$e['to_id'],
             'type'   => $e['type'],
+            'last_msg_id' => isset($e['last_msg_id']) ? (int)$e['last_msg_id'] : 0,
             'deleted'=> isset($e['deleted_at']) ? $e['deleted_at'] !== null : false
         ];
     }, $edges);
@@ -177,7 +159,6 @@ try {
     echo json_encode([
         'nodes' => $formattedNodes,
         'links' => $formattedEdges,
-        'last_messages' => $lastMessages,
         'requests' => $requests,
         'current_user_id' => (int)$current_user_id,
         'last_update' => $clientNextCursor,
