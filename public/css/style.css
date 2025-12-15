@@ -487,3 +487,16 @@ input[type="password"]::-ms-clear {
     
     white-space: nowrap !important;
 }
+
+/* --- Restored Connection Panel Styles --- */
+.conn-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px; border-radius: 8px; cursor: default; background: rgba(255,255,255,0.05); transition: background 0.2s; white-space: nowrap; }
+.conn-item:hover { background: rgba(99, 102, 241, 0.15); }
+.conn-profile { display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden; }
+.conn-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid #6366f1; }
+.conn-info { display: flex; flex-direction: column; }
+.conn-name { font-weight: 600; color: #e2e8f0; }
+.conn-empty { color: #94a3b8; font-size: 0.9em; }
+.conn-actions { display: flex; gap: 4px; }
+.conn-btn { background: rgba(255,255,255,0.1); border: none; color: #e2e8f0; width: 32px; height: 32px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1em; transition: background 0.2s, transform 0.1s; }
+.conn-btn:hover { background: rgba(99, 102, 241, 0.5); transform: scale(1.05); }
+.conn-btn:active { transform: scale(0.95); }
