@@ -89,7 +89,7 @@ if (!$currentUser) {
         Controls: WASD to Move
     </div>
 
-    <div id="connection-panel" class="hud-panel">
+    <div id="connection-panel" class="hud-panel desktop-only">
         <div class="panel-header">
             <span class="panel-title">Connections</span>
             <button id="conn-toggle-btn" class="panel-toggle">◀</button>
@@ -97,7 +97,7 @@ if (!$currentUser) {
         <div id="connection-list"></div>
     </div>
 
-    <div id="search-hud" class="hud-panel command-bar">
+    <div id="search-hud" class="hud-panel command-bar desktop-only">
         <div class="command-bar-inner search-bar-wrapper">
             <span class="command-icon">🔍</span>
             <div class="command-input-wrap">
@@ -150,13 +150,25 @@ if (!$currentUser) {
         </div>
     </div>
 
-    <div id="inspector-panel" class="hud-panel">
+    <div id="inspector-panel" class="hud-panel desktop-only">
         <div id="inspector-data"></div>
     </div>
 
     <div id="chat-hud"></div>
 
-    <button id="mobile-menu-btn" aria-label="Toggle connections">👥</button>
+    <div id="mobile-connection-overlay" class="mobile-only">
+        <div class="connection-overlay-panel" role="dialog" aria-modal="true">
+            <div class="connection-overlay-header">
+                <div class="connection-overlay-title">Connections</div>
+                <div class="overlay-action">
+                    <button id="connection-overlay-close" class="overlay-close-btn">Close</button>
+                </div>
+            </div>
+            <div id="mobile-connection-list" class="connection-overlay-list"></div>
+        </div>
+    </div>
+
+    <button id="mobile-menu-btn" class="mobile-only" aria-label="Toggle connections">👥</button>
 
     <script type="module">
         import { initApp } from './public/js/app.js?v=<?= $version ?>';
