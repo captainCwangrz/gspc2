@@ -119,7 +119,7 @@ if (!$currentUser) {
                 </div>
             </div>
             <div class="identity-actions">
-                <button id="zoom-btn" class="pill-btn primary icon-btn-compact" title="Zoom to Me">⌖</button>
+                <button id="zoom-btn" class="pill-btn primary icon-btn-compact" title="Zoom to Me">🔎</button>
                 <form id="logout-form" method="POST" action="logout.php" class="hidden-form">
                     <input type="hidden" name="csrf_token" value="<?= $csrfToken ?>">
                 </form>

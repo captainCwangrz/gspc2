@@ -33,6 +33,7 @@ export function initUI({ state, config, relationTypes: relTypes, refreshData }) 
     const zoomBtn = document.getElementById('zoom-btn');
     if (zoomBtn) {
         zoomBtn.addEventListener('click', () => {
+            if (window.resetFocus) window.resetFocus();
             const myNode = State.graphData.nodes.find(n => n.id === State.userId);
             if (myNode && window.lookAtNode) {
                 window.lookAtNode(myNode.id);
@@ -179,10 +180,16 @@ export function updateConnectionPanel() {
 
     const html = connections.length > 0
         ? connections.map(node => `
-            <div class="conn-item" onclick="window.openChat(${node.id})">
-                <img src="${node.avatar}" class="conn-avatar">
-                <div class="conn-info">
-                    <div class="conn-name">${escapeHtml(node.name)}</div>
+            <div class="conn-item">
+                <div class="conn-profile">
+                    <img src="${node.avatar}" class="conn-avatar">
+                    <div class="conn-info">
+                        <div class="conn-name">${escapeHtml(node.name)}</div>
+                    </div>
+                </div>
+                <div class="conn-actions">
+                    <button class="conn-btn" title="Message" onclick="window.openChat(${node.id})">💬</button>
+                    <button class="conn-btn" title="Locate" onclick="window.zoomToUser(${node.id})">🔎</button>
                 </div>
             </div>
         `).join('')
@@ -192,6 +199,7 @@ export function updateConnectionPanel() {
 }
 
 function zoomToUser(userId) {
+    if (window.resetFocus) window.resetFocus();
     const node = State?.graphData?.nodes?.find(user => user.id === userId);
     if (node && window.lookAtNode) {
         window.lookAtNode(node.id);
