@@ -78,10 +78,11 @@ input[type="password"]::-ms-clear {
 .username-label { white-space: nowrap; }
 .user-handle, .user-id-label { font-size: 0.85em; color: #94a3b8; }
 .identity-actions { display: flex; gap: 8px; align-items: center; }
-.pill-btn { border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06); color: #e2e8f0; padding: 8px 12px; border-radius: 999px; cursor: pointer; }
+.pill-btn { border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06); color: #e2e8f0; padding: 8px 12px; border-radius: 999px; cursor: pointer; transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s; }
 .pill-btn.primary { background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff; border: none; }
 .pill-btn.secondary { background: rgba(239,68,68,0.15); color: #fecdd3; border: 1px solid rgba(239,68,68,0.3); }
-.icon-btn-compact { padding: 8px; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; }
+.pill-btn:hover, .icon-btn-compact:hover { transform: scale(1.05); box-shadow: 0 0 10px rgba(99, 102, 241, 0.3); filter: brightness(1.2); }
+.icon-btn-compact { padding: 0; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; line-height: 1; transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s; }
 .identity-signature-row { display: flex; flex-direction: column; gap: 10px; }
 .signature-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .hidden-form { display:none; }
@@ -188,6 +189,17 @@ input[type="password"]::-ms-clear {
     justify-content: center;
 }
 .logout-container .btn-secondary { background: #ef4444; }
+
+#zoom-btn {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    color: #e2e8f0 !important;
+}
+
+#zoom-btn:hover {
+    background: rgba(255, 255, 255, 0.2) !important;
+    border-color: rgba(255, 255, 255, 0.4) !important;
+}
 
 /* Connection Panel */
 #connection-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
