@@ -119,11 +119,11 @@ if (!$currentUser) {
                 </div>
             </div>
             <div class="identity-actions">
-                <button id="zoom-btn" class="pill-btn primary">Zoom to Me</button>
+                <button id="zoom-btn" class="pill-btn primary icon-btn-compact" title="Zoom to Me">⌖</button>
                 <form id="logout-form" method="POST" action="logout.php" class="hidden-form">
                     <input type="hidden" name="csrf_token" value="<?= $csrfToken ?>">
                 </form>
-                <button class="pill-btn secondary" type="button" onclick="document.getElementById('logout-form').submit();">Log Out</button>
+                <button class="pill-btn secondary icon-btn-compact" type="button" title="Log Out" onclick="document.getElementById('logout-form').submit();">⏻</button>
             </div>
         </div>
         <div class="identity-signature-row">
