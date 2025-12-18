@@ -105,8 +105,12 @@ try {
 
     // 1. Get nodes (incremental if last_update provided)
     if ($isIncremental) {
+        // Fix: Subtract 2 seconds from the timestamp to catch overlapping transactions (Race Condition Fix)
+        // Note: ensure your DB supports DATE_SUB, or calculate in PHP. 
+        // Calculating in PHP is safer for database portability.
+        $bufferedTime = date('Y-m-d H:i:s.u', strtotime($lastUpdateTime) - 2); 
         $stmt = $pdo->prepare('SELECT id, username, real_name, avatar, signature FROM users WHERE updated_at > ?');
-        $stmt->execute([$lastUpdateTime]);
+        $stmt->execute([$bufferedTime]);
         $nodes = $stmt->fetchAll();
     } else {
         $nodes = $pdo->query('SELECT id, username, real_name, avatar, signature FROM users')->fetchAll();
@@ -114,8 +118,9 @@ try {
 
     // 2. Get relationships (incremental if last_update provided)
     if ($isIncremental) {
+        $bufferedTime = date('Y-m-d H:i:s.u', strtotime($lastUpdateTime) - 2);
         $stmt = $pdo->prepare('SELECT from_id, to_id, type, last_msg_id, deleted_at FROM relationships WHERE updated_at > ?');
-        $stmt->execute([$lastUpdateTime]);
+        $stmt->execute([$bufferedTime]);
         $edges = $stmt->fetchAll();
     } else {
         $edges = $pdo->query('SELECT from_id, to_id, type, last_msg_id, deleted_at FROM relationships WHERE deleted_at IS NULL')->fetchAll();

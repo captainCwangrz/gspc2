@@ -684,7 +684,8 @@ function showNodeInspector(node) {
         const mutualCrush = outgoing && incoming && outgoing.type === 'CRUSH' && incoming.type === 'CRUSH';
 
         const canMessage = Boolean(outgoing || incoming || undirected);
-        const canManageRelationship = Boolean(outgoing || undirected);
+        // Allow management if there is ANY link (Outgoing, Incoming, or Undirected)
+        const canManageRelationship = Boolean(outgoing || incoming || undirected);
         const activeRel = outgoing || undirected;
         if (mutualCrush) {
             statusHtml = `
