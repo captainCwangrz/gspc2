@@ -1,10 +1,8 @@
 /* Responsive Visibility Helpers */
 .desktop-only { display: block; }
 
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Varela+Round&family=Fredoka:wght@400;700&display=swap');
-
 /* public/css/style.css */
-body { margin: 0; overflow: hidden; font-family: 'Noto Sans SC', 'Segoe UI', 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif; background: #000; color: white; }
+body { margin: 0; overflow: hidden; font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #000; color: white; }
 
 html::-webkit-scrollbar,
 body::-webkit-scrollbar,

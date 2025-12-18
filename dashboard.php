@@ -32,6 +32,9 @@ if (!$currentUser) {
     <meta name="csrf-token" content="<?= $csrfToken ?>">
     <title>Gossip Chain 3D</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Varela+Round&family=Fredoka:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="public/css/style.css?v=<?= $version ?>">
 
     <script type="importmap">
