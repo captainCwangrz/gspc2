@@ -739,7 +739,7 @@ function showNodeInspector(node) {
         }
 
         const preferredType = incoming && incoming.type === 'CRUSH' ? 'CRUSH' : null;
-        const baseOptions = canManageRelationship
+        const baseOptions = (canManageRelationship && activeRel)
             ? RELATION_TYPES.filter(t => t !== activeRel.type)
             : RELATION_TYPES;
         const selectOptions = baseOptions
