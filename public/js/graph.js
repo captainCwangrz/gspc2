@@ -109,6 +109,7 @@ function isFormFieldActive() {
 function buildStarVertexShader() {
     return `
         uniform float uTime;
+        uniform float uPixelRatio;
         attribute vec3 starColor;
         attribute float size;
         attribute float phase;
@@ -119,13 +120,14 @@ function buildStarVertexShader() {
             vColor = starColor;
             vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
             // 1. Calculate the theoretical size based on distance
-            float projSize = size * (1000.0 / -mvPosition.z);
+            // Multiply by uPixelRatio to ensure physical size consistency
+            float projSize = size * (1000.0 / -mvPosition.z) * uPixelRatio;
 
             // 2. GEOMETRIC FIX: Clamp minimum PointSize to 4.0.
             // This prevents the "core" (0.1 of diameter) from becoming sub-pixel (< 1px).
             // If the core is sub-pixel, rasterization snaps it on/off (flickering).
             // A 4.0px point results in a ~0.8px core, which is stable.
-            gl_PointSize = clamp(projSize, 4.0, 64.0);
+            gl_PointSize = clamp(projSize, 4.0 * uPixelRatio, 64.0 * uPixelRatio);
             vSpriteSize = gl_PointSize;
 
             gl_Position = projectionMatrix * mvPosition;
@@ -136,7 +138,7 @@ function buildStarVertexShader() {
             // Range 1.8 -> 3.8:
             // - Below 1.8 theoretical pixels: Fully invisible (0.0 opacity).
             // - 1.8 to 3.8: Fades in smoothly.
-            float sizeFade = smoothstep(1.8, 3.8, projSize);
+            float sizeFade = smoothstep(1.8 * uPixelRatio, 3.8 * uPixelRatio, projSize);
             float t = 0.5 + 0.5 * sin(uTime * ${STAR_TWINKLE_SPEED} + phase);
             float eased = t * t * (3.0 - 2.0 * t);
             float sizeFactor = clamp((size - 3.0) / 24.0, 0.0, 1.0);
@@ -150,6 +152,7 @@ function buildStarVertexShader() {
 function buildDustVertexShader() {
     return `
         uniform float uTime;
+        uniform float uPixelRatio;
         attribute vec3 starColor;
         attribute float size;
         attribute float phase;
@@ -158,9 +161,9 @@ function buildDustVertexShader() {
         void main() {
             vColor = starColor;
             vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-            
+
             // Calculate projected size based on distance
-            float projSize = size * (1000.0 / -mvPosition.z);
+            float projSize = size * (1000.0 / -mvPosition.z) * uPixelRatio;
 
             gl_Position = projectionMatrix * mvPosition;
             gl_PointSize = clamp(projSize, 0.0, 28.0);
@@ -788,7 +791,8 @@ export function initStarfieldBackground() {
 
         const mat = new THREE.ShaderMaterial({
             uniforms: {
-                uTime: { value: 0 }
+                uTime: { value: 0 },
+                uPixelRatio: { value: window.devicePixelRatio || 1.0 }
             },
             vertexShader: buildStarVertexShader(),
             fragmentShader: STAR_ANTI_FLICKER_FRAGMENT_SHADER,
@@ -847,7 +851,8 @@ function createSpaceDust(color) {
     const mat = new THREE.ShaderMaterial({
         uniforms: {
             uTime: { value: 0 },
-            uOpacity: { value: 1.0 }
+            uOpacity: { value: 1.0 },
+            uPixelRatio: { value: window.devicePixelRatio || 1.0 }
         },
         vertexShader: buildDustVertexShader(),
         fragmentShader: STAR_FRAGMENT_SHADER,
