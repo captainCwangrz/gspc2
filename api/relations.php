@@ -16,7 +16,7 @@ require_login();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     checkCsrf();
 }
-$user_id = $_SESSION["user_id"];
+$user_id = (int) $_SESSION["user_id"];
 session_write_close(); // Release session lock
 
 $action = $_POST["action"] ?? "";
