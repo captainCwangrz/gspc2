@@ -35,7 +35,7 @@ let Graph = null;
 let pollTimer = null;
 let hiddenPollSkip = false;
 
-export function initApp(userId) {
+export async function initApp(userId) {
     if (!CONFIG || !CONFIG.relStyles) {
         console.error('Required configuration missing. Aborting initialization.');
         return;
@@ -63,8 +63,8 @@ export function initApp(userId) {
 
     initUI({ state: State, config: CONFIG, relationTypes: RELATION_TYPES, refreshData: loadGraphData });
 
-    hydrateReadReceipts();
-    loadGraphData();
+    await hydrateReadReceipts();
+    await loadGraphData();
 
     initStarfieldBackground();
     animateGraph();
@@ -471,7 +471,6 @@ function resetGhosting() {
     });
 
     (data.links || []).forEach(link => {
-        if (link.__lineObj) link.__lineObj.visible = true;
         if (link.__group) {
             link.__group.visible = true;
             fadeObjectOpacity(link.__group, 1);
@@ -560,15 +559,11 @@ function applyFocusGhosting(centerNodeId) {
             link.__group.visible = isVisible;
             fadeObjectOpacity(link.__group, isVisible ? 1 : 0);
         }
-
-        if (link.__lineObj) {
-            link.__lineObj.visible = isVisible;
-            fadeObjectOpacity(link.__lineObj, isVisible ? 1 : 0);
-        }
     });
 }
 
 function handleNodeClick(node) {
+    if (State.selectedNodeId === node.id) return;
     State.selectedNodeId = node.id;
     const dist = 150;
     const v = new THREE.Vector3(node.x, node.y, node.z || 0);
