@@ -182,48 +182,5 @@ if (!$currentUser) {
             start();
         }
     </script>
-    <!-- [MOBILE-REFACTOR-START] -->
-    <link rel="stylesheet" href="public/css/mobile.css">
-
-    <div id="mobile-shell" style="display: none;">
-        <header id="mobile-top-bar">
-            <span class="brand">GossipChain</span>
-            <button id="mobile-btn-search" class="icon-btn">🔍</button>
-        </header>
-
-        <div id="mobile-sheet-backdrop" class="backdrop hidden"></div>
-        <div id="mobile-sheet" class="sheet hidden">
-            <div class="sheet-drag-handle"></div>
-            <div id="sheet-content"></div>
-        </div>
-
-        <div id="mobile-chat-view" class="fs-view hidden">
-            <header class="fs-header">
-                <button id="chat-btn-close">✕</button>
-                <span id="chat-user-name">Chat</span>
-            </header>
-            <div id="mobile-chat-list"></div>
-            <div class="fs-footer">
-                <input type="text" id="mobile-chat-input" placeholder="Message...">
-                <button id="mobile-chat-send">Send</button>
-            </div>
-        </div>
-
-        <div id="mobile-search-view" class="fs-view hidden">
-             <header class="fs-header">
-                <input type="text" id="mobile-search-input" placeholder="Search users...">
-                <button id="search-btn-cancel">Cancel</button>
-            </header>
-            <div id="mobile-search-results"></div>
-        </div>
-
-        <nav id="mobile-nav">
-            <button class="nav-item active" data-target="explore">🌍 <small>Explore</small></button>
-            <button class="nav-item" data-target="me">👤 <small>Me</small></button>
-        </nav>
-    </div>
-
-    <script src="public/js/mobile.js"></script>
-    <!-- [MOBILE-REFACTOR-END] -->
 </body>
 </html>

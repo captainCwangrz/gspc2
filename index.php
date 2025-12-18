@@ -19,7 +19,6 @@ if(isset($_SESSION["user_id"])) {
     <title>Social-Demo Login</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="stylesheet" href="public/css/style.css?v=<?= $version ?>">
-    <link rel="stylesheet" href="public/css/mobile.css?v=<?= $version ?>">
     </head>
 <body class="login-body">
     <div class="login-container">
