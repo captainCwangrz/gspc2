@@ -14,6 +14,7 @@ const MobileApp = {
         this.bindChat();
         this.bindSheet();
 
+        this.adjustViewportHeight();
         this.elements.shell.style.display = 'block';
     },
 
@@ -58,6 +59,8 @@ const MobileApp = {
             searchBtn.addEventListener('click', () => {
                 this.hideFullScreens();
                 searchView?.classList.remove('hidden');
+                this.bindViewportResize();
+                this.adjustViewportHeight();
                 searchInput?.focus();
             });
         }
@@ -119,6 +122,9 @@ const MobileApp = {
         if (chatBtn) {
             chatBtn.addEventListener('click', () => this.openChat(node));
         }
+
+        this.bindViewportResize();
+        this.adjustViewportHeight();
 
         sheet.classList.remove('hidden');
         sheet.classList.add('visible');
@@ -216,23 +222,51 @@ const MobileApp = {
     },
 
     bindViewportResize() {
-        if (!window.visualViewport) return;
-        this.viewportListener = () => this.adjustViewportHeight();
-        window.visualViewport.addEventListener('resize', this.viewportListener);
-    },
+        this.removeViewportListener();
 
-    removeViewportListener() {
-        if (this.viewportListener && window.visualViewport) {
-            window.visualViewport.removeEventListener('resize', this.viewportListener);
-            this.viewportListener = null;
+        const handler = () => this.adjustViewportHeight();
+        this.viewportListener = handler;
+
+        window.addEventListener('resize', handler, { passive: true });
+        window.addEventListener('orientationchange', handler, { passive: true });
+
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', handler, { passive: true });
+            window.visualViewport.addEventListener('scroll', handler, { passive: true });
         }
     },
 
+    removeViewportListener() {
+        if (!this.viewportListener) return;
+
+        window.removeEventListener('resize', this.viewportListener);
+        window.removeEventListener('orientationchange', this.viewportListener);
+
+        if (window.visualViewport) {
+            window.visualViewport.removeEventListener('resize', this.viewportListener);
+            window.visualViewport.removeEventListener('scroll', this.viewportListener);
+        }
+
+        this.viewportListener = null;
+    },
+
     adjustViewportHeight() {
-        const { chatView } = this.elements;
-        if (!chatView) return;
-        const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-        chatView.style.height = `${height}px`;
+        const { chatView, searchView, sheet } = this.elements;
+        const viewportHeight = window.visualViewport ? Math.round(window.visualViewport.height) : window.innerHeight;
+
+        document.documentElement.style.setProperty('--mobile-viewport-height', `${viewportHeight}px`);
+
+        [chatView, searchView].forEach(view => {
+            if (view) {
+                view.style.height = `${viewportHeight}px`;
+                view.style.minHeight = `${viewportHeight}px`;
+            }
+        });
+
+        if (sheet) {
+            const sheetMax = Math.max(240, viewportHeight - 120);
+            sheet.style.maxHeight = `${sheetMax}px`;
+        }
     }
 };
 
