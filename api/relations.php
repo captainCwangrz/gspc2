@@ -178,8 +178,10 @@ try {
                     $softDeleteCrush->execute([(int)$request['from_id'], (int)$request['to_id'], (int)$request['to_id'], (int)$request['from_id']]);
 
                     [$normFrom, $normTo] = normalizeFromTo($request['type'], (int)$request['from_id'], (int)$request['to_id']);
-                    $insertUndirected = $pdo->prepare('INSERT INTO relationships (from_id, to_id, type, deleted_at) VALUES (?, ?, ?, NULL) ON DUPLICATE KEY UPDATE type=VALUES(type), deleted_at=NULL, updated_at=NOW(6)');
-                    $insertUndirected->execute([$normFrom, $normTo, $request['type']]);
+                    // Fix: Bind the type parameter explicitly in the UPDATE clause instead of using VALUES()
+                    $insertUndirected = $pdo->prepare('INSERT INTO relationships (from_id, to_id, type, deleted_at) VALUES (?, ?, ?, NULL) ON DUPLICATE KEY UPDATE type=?, deleted_at=NULL, updated_at=NOW(6)');
+                    // Note: We must pass $request['type'] twice (once for INSERT, once for UPDATE)
+                    $insertUndirected->execute([$normFrom, $normTo, $request['type'], $request['type']]);
                 }
 
                 $pdo->commit();
@@ -223,7 +225,8 @@ try {
         $idsToDelete = [];
         foreach ($rows as $row) {
             if (isDirectedType($row['type'])) {
-                if ((int)$row['from_id'] === $user_id && (int)$row['to_id'] === $to_id) {
+                // Allow deletion if user is the Sender OR the Recipient
+                if ((int)$row['from_id'] === $user_id || (int)$row['to_id'] === $user_id) {
                     $idsToDelete[] = (int)$row['id'];
                 }
             } else {
